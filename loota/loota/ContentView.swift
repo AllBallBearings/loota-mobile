@@ -9,39 +9,50 @@ import SwiftUI
 import RealityKit
 
 struct ContentView : View {
+    // State variable to track the accumulated rotation angle
+    @State private var totalRotationAngle: Float = 0.0
 
     var body: some View {
         RealityView { content in
+            // Load the DollarSign model asynchronously
+            do {
+                let dollarSignEntity = try await Entity(named: "DollarSign", in: nil)
 
-            // Create a cube model
-            let model = Entity()
-            let mesh = MeshResource.generateBox(size: 0.1, cornerRadius: 0.005)
-            let material = SimpleMaterial(color: .gray, roughness: 0.15, isMetallic: true)
-            model.components.set(ModelComponent(mesh: mesh, materials: [material]))
-            // Position the cube ~2 feet (0.61 meters) above the anchor
-            model.position = [0, 0.61, 0]
+                // Name the entity for rotation lookup
+                dollarSignEntity.name = "dollar_sign_model"
 
-            // Create horizontal plane anchor for the content
-            let anchor = AnchorEntity(.plane(.horizontal, classification: .any, minimumBounds: SIMD2<Float>(0.2, 0.2)))
-            anchor.addChild(model)
+                // Position the single entity
+                dollarSignEntity.position = [0, 0.2, 0] // Center position
 
-            // Add the horizontal plane anchor to the scene
-            content.add(anchor)
+                // --- Anchor Setup ---
+                let anchor = AnchorEntity(.plane(.horizontal, classification: .any, minimumBounds: SIMD2<Float>(0.2, 0.2)))
+                anchor.addChild(dollarSignEntity) // Add the single model directly
 
-            // Animate the cube to rotate
-            let rotation = FromToByAnimation<Transform>(
-                from: Transform(rotation: simd_quatf(angle: 0, axis: [0, 1, 0])),
-                to: Transform(rotation: simd_quatf(angle: .pi * 2, axis: [0, 1, 0])), // Rotate 360 degrees (2 * pi radians)
-                duration: 5, // Over 5 seconds
-                bindTarget: .transform,
-                repeatMode: .repeat // Repeat indefinitely
-            )
+                // Add anchor to the scene
+                content.add(anchor)
 
-            if let animation = try? AnimationResource.generate(with: rotation) {
-                model.playAnimation(animation)
+                content.camera = .spatialTracking
+
+            } catch {
+                print("Error loading DollarSign model: \(error)")
             }
 
-            content.camera = .spatialTracking
+        } update: { content in
+            // Find the single entity by name in the update closure
+            guard let model = content.entities.first(where: { $0.name == "dollar_sign_model" }) else {
+                // It might take a frame or two for the async loading to complete and the entity to be added.
+                // print("Dollar sign model not found in update closure yet.")
+                return
+            }
+
+            // Increment the total rotation angle
+            totalRotationAngle += 0.01 // Adjust speed as needed
+
+            // Calculate the new absolute orientation
+            let newOrientation = simd_quatf(angle: totalRotationAngle, axis: [0, 1, 0]) // Rotate around Y axis
+
+            // Set the model's orientation directly
+            model.orientation = newOrientation
 
         }
         .edgesIgnoringSafeArea(.all)
