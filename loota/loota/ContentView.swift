@@ -1,65 +1,91 @@
-//
-//  ContentView.swift
-//  loota
-//
-//  Created by Jared Goolsby on 3/28/25.
-//
+// ContentView.swift
+// AR Cube Example
 
 import SwiftUI
 import RealityKit
+import ARKit
 
-struct ContentView : View {
-    // State variable to track the accumulated rotation angle
-    @State private var totalRotationAngle: Float = 0.0
-
+struct ContentView: View {
     var body: some View {
-        RealityView { content in
-            // Load the DollarSign model asynchronously
-            do {
-                let dollarSignEntity = try await Entity(named: "DollarSign", in: nil)
-
-                // Name the entity for rotation lookup
-                dollarSignEntity.name = "dollar_sign_model"
-
-                // Position the single entity
-                dollarSignEntity.position = [0, 0.2, 0] // Center position
-
-                // --- Anchor Setup ---
-                let anchor = AnchorEntity(.plane(.horizontal, classification: .any, minimumBounds: SIMD2<Float>(0.2, 0.2)))
-                anchor.addChild(dollarSignEntity) // Add the single model directly
-
-                // Add anchor to the scene
-                content.add(anchor)
-
-                content.camera = .spatialTracking
-
-            } catch {
-                print("Error loading DollarSign model: \(error)")
-            }
-
-        } update: { content in
-            // Find the single entity by name in the update closure
-            guard let model = content.entities.first(where: { $0.name == "dollar_sign_model" }) else {
-                // It might take a frame or two for the async loading to complete and the entity to be added.
-                // print("Dollar sign model not found in update closure yet.")
-                return
-            }
-
-            // Increment the total rotation angle
-            totalRotationAngle += 0.01 // Adjust speed as needed
-
-            // Calculate the new absolute orientation
-            let newOrientation = simd_quatf(angle: totalRotationAngle, axis: [0, 1, 0]) // Rotate around Y axis
-
-            // Set the model's orientation directly
-            model.orientation = newOrientation
-
-        }
-        .edgesIgnoringSafeArea(.all)
+        ARViewContainer()
+            .edgesIgnoringSafeArea(.all)
     }
-
 }
 
-#Preview {
-    ContentView()
+struct ARViewContainer: UIViewRepresentable {
+    func makeUIView(context: Context) -> ARView {
+        let arView = ARView(frame: .zero)
+        
+        // Configure AR session for world tracking
+        let config = ARWorldTrackingConfiguration()
+        config.planeDetection = []
+        config.environmentTexturing = .automatic
+        arView.session.run(config, options: [])
+        
+        // Create an anchor 1.524m in front, 0.609m up (5ft, 2ft)
+        let anchor = AnchorEntity(world: [0, 0.609, -1.524])
+        
+        // Create a flat disc (coin) using a cylinder mesh
+        let coinRadius: Float = 0.12
+        let coinHeight: Float = 0.02
+        let coinMesh = MeshResource.generateCylinder(height: coinHeight, radius: coinRadius)
+        let coinMaterial = SimpleMaterial(color: .yellow, isMetallic: true)
+        let coinEntity = ModelEntity(mesh: coinMesh, materials: [coinMaterial])
+
+        // Rotate the coin so it stands on its edge (vertical, like a coin on a table)
+        coinEntity.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+
+        // Add coin to anchor
+        anchor.addChild(coinEntity)
+        arView.scene.addAnchor(anchor)
+
+        // Animate the coin spinning about its y-axis (vertical axis in world space)
+        // Use CADisplayLink for smooth, continuous rotation
+        let revolutionDuration: TimeInterval = 1.5 // 1 revolution per 1.5 seconds
+        let displayLink = CADisplayLink(target: context.coordinator, selector: #selector(context.coordinator.updateRotation))
+        displayLink.add(to: .main, forMode: .default)
+
+        // Store references in the coordinator for animation
+        context.coordinator.coinEntity = coinEntity
+        context.coordinator.anchor = anchor
+        context.coordinator.revolutionDuration = revolutionDuration
+        context.coordinator.accumulatedAngle = 0
+
+        return arView
+    }
+
+    func updateUIView(_ uiView: ARView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var coinEntity: ModelEntity?
+        var anchor: AnchorEntity?
+        var revolutionDuration: TimeInterval = 1.5
+        var accumulatedAngle: Float = 0
+        var lastTimestamp: CFTimeInterval?
+
+        @objc func updateRotation(displayLink: CADisplayLink) {
+            guard let coinEntity = coinEntity else { return }
+            let now = displayLink.timestamp
+            let dt: Float
+            if let last = lastTimestamp {
+                dt = Float(now - last)
+            } else {
+                dt = 0
+            }
+            lastTimestamp = now
+
+            // Angle increment for this frame
+            let anglePerSecond: Float = 2 * .pi / Float(revolutionDuration)
+            accumulatedAngle += anglePerSecond * dt
+
+            // Keep the coin standing on its edge (x: 90deg), and rotate about y
+            let xRot = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+            let yRot = simd_quatf(angle: accumulatedAngle, axis: [0, 1, 0])
+            coinEntity.transform.rotation = yRot * xRot
+        }
+    }
 }
