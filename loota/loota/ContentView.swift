@@ -1,6 +1,8 @@
 // ContentView.swift
 
 import SwiftUI
+import RealityKit   // <-- Add this import
+import ARKit        // <-- Add this import
 
 enum ARObjectType: String, CaseIterable, Identifiable {
     case none = "None"
@@ -13,24 +15,19 @@ struct ContentView: View {
     @State private var coinsCollected: Int = 0
     @State private var animate: Bool = false
     @State private var selectedObject: ARObjectType = .none
-    @State private var distanceInFeet: Float = 5.0 // Initial distance (matches ARViewContainer)
-    @State private var heightInFeet: Float = 1.0   // Initial height (matches ARViewContainer)
-
-    // Helper to format float values
-    private func formatFloat(_ value: Float) -> String {
-        String(format: "%.1f", value)
-    }
+    // Removed map-related state variables
+    @State private var arViewRef: ARView? = nil // Reference to ARView for screen projection
+    @State private var objectDistances: [UUID: Float] = [:] // Store distances keyed by Anchor ID
 
     var body: some View {
         ZStack { // Main container ZStack
             // AR View in the background
-            if selectedObject != .none {
-                ARViewContainer(
-                    distanceInFeet: $distanceInFeet, // Pass binding
-                    heightInFeet: $heightInFeet,   // Pass binding
-                    onCoinCollected: {
-                        coinsCollected += 1
-                        withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
+            ARViewContainer(
+                // Removed pinLocations binding
+                arViewRef: $arViewRef, // Pass ARView reference binding
+                onCoinCollected: { // Keep existing callback
+                    coinsCollected += 1
+                    withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
                             animate = true
                         }
                         // Reset animation after short delay
@@ -38,19 +35,70 @@ struct ContentView: View {
                             animate = false
                         }
                     },
+                onDistanceUpdate: { distances in // Add the new callback
+                        // Update the state variable when distances are received
+                        self.objectDistances = distances
+                    },
                     objectType: selectedObject
                 )
-                .id(selectedObject) // Recreate only when object type changes
+                // Use object type for ID
+                .id(selectedObject)
                 .edgesIgnoringSafeArea(.all)
-            } else {
-                 // Placeholder when no object is selected
-                 Color.gray.edgesIgnoringSafeArea(.all)
+            // } else { // Keep ARView always visible
+            //     // Placeholder when no object is selected (or no pins placed?)
+            //      Color.gray.edgesIgnoringSafeArea(.all)
+            //      Text("Select an object type and place pins")
+            //          .foregroundColor(.white)
+            //          .font(.title)
+            // } // Let's keep the AR view active and rely on ARViewContainer to handle no pins
+
+            // Show placeholder text if no object is selected
+            if selectedObject == .none {
+                 Color.gray.opacity(0.7).edgesIgnoringSafeArea(.all) // Semi-transparent overlay
                  Text("Select an object type")
                      .foregroundColor(.white)
                      .font(.title)
+                     .padding()
+                     .background(Color.black.opacity(0.5))
+                     .cornerRadius(10)
             }
+            // Removed placeholder text for placing pins
 
-            // UI Overlay VStack
+
+            // --- Distance Overlay ---
+            if let arView = arViewRef {
+                // Iterate through the anchors currently managed by the Coordinator
+                // Use the objectDistances dictionary which is updated by the Coordinator
+                ForEach(Array(objectDistances.keys), id: \.self) { anchorID in
+                    // Find the anchor in the scene using its ID
+                    if let anchor = arView.scene.anchors.first(where: { $0.id == anchorID }),
+                       let distance = objectDistances[anchorID] { // Get distance from state
+                        
+                        let worldPosition = anchor.position(relativeTo: nil)
+                        
+                        // Project the anchor's position to screen coordinates
+                        if let screenPoint = arView.project(worldPosition) {
+                            
+                            // Format the distance string
+                            let distanceInFeet = distance * 3.28084
+                            let label = String(format: "%.1f ft / %.1f m", distanceInFeet, distance)
+                            
+                            // Overlay the label at the projected screen point
+                            Text(label)
+                                .font(.system(size: 14, weight: .medium, design: .monospaced)) // Adjusted font
+                                .foregroundColor(.white)
+                                .padding(4) // Add some padding
+                                .background(Color.black.opacity(0.5)) // Add background for readability
+                                .cornerRadius(5)
+                                .shadow(color: .black.opacity(0.5), radius: 3, x: 1, y: 1)
+                                .position(x: screenPoint.x, y: screenPoint.y + 35) // Adjusted offset
+                        }
+                    }
+                }
+            }
+            // --- End Distance Overlay ---
+
+            // UI Overlay VStack (This is the main UI layer)
             VStack {
                 // Top Row: Counter and Picker
                 HStack(alignment: .top) {
@@ -93,43 +141,17 @@ struct ContentView: View {
                 } // <<< HStack ends here (Correct position)
                 .padding(.bottom, 20) // Add padding below top controls
 
-                Spacer() // Pushes sliders to bottom/right
+                Spacer() // Pushes controls to bottom (if any were left)
 
-                // Bottom/Right Sliders
-                HStack {
-                    // Bottom Distance Slider
-                    VStack {
-                        Slider(value: $distanceInFeet, in: 2...30, step: 0.5)
-                            .padding(.horizontal)
-                        Text("Distance: \(formatFloat(distanceInFeet)) ft")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.bottom, 5)
-                    }
-                    .padding(.horizontal)
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(10)
-                    .padding(.leading)
-                    .padding(.bottom)
+                // Removed "Place on Map" Button
 
-                    // Right Height Slider (Rotated)
-                    VStack {
-                         Slider(value: $heightInFeet, in: 0...10, step: 0.5)
-                             .rotationEffect(.degrees(-90))
-                             .frame(width: 150) // Adjust width for rotated slider height
-                         Text("Height: \(formatFloat(heightInFeet)) ft")
-                             .font(.caption)
-                             .foregroundColor(.white)
-                             .padding(.trailing, 5) // Adjust text position
-                     }
-                     .frame(width: 60) // Container width for rotated slider + text
-                     .padding(.vertical, 20) // Padding inside the Vstack
-                     .background(Color.black.opacity(0.6))
-                     .cornerRadius(10)
-                     .padding(.trailing)
-                     .padding(.bottom) // Align bottom with distance slider
-                }
             } // End UI Overlay VStack
         } // End Main ZStack
+        // Removed sheet modifier
+        // Removed .onOpenURL and handleIncomingURL function
     }
+
+    // Removed handleIncomingURL function
 }
+
+// Removed CLLocationCoordinate2D Hashable extension
