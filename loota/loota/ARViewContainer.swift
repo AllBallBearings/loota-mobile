@@ -2,26 +2,52 @@
 
 import SwiftUI
 import RealityKit
+import CoreLocation
 import ARKit
 import AVFoundation
 
 struct ARViewContainer: UIViewRepresentable {
-    @Binding var distanceInFeet: Float
-    @Binding var heightInFeet: Float
+    @Binding var objectLocation: CLLocationCoordinate2D?
+    @Binding var referenceLocation: CLLocationCoordinate2D?
     var onCoinCollected: (() -> Void)?
     var objectType: ARObjectType
 
-    // Conversion factor
-    private let feetToMeters: Float = 0.3048
+    public init(objectLocation: Binding<CLLocationCoordinate2D?>,
+               referenceLocation: Binding<CLLocationCoordinate2D?>,
+               onCoinCollected: (() -> Void)? = nil,
+               objectType: ARObjectType) {
+        self._objectLocation = objectLocation
+        self._referenceLocation = referenceLocation
+        self.onCoinCollected = onCoinCollected
+        self.objectType = objectType
+    }
+
+    // GPS conversion constants
+    private let metersPerDegree: Double = 111320.0 // Approximate meters per degree at equator
+    
+    private func convertToARWorldCoordinate(objectLocation: CLLocationCoordinate2D, 
+                                          referenceLocation: CLLocationCoordinate2D) -> SIMD3<Float> {
+        let latDelta = objectLocation.latitude - referenceLocation.latitude
+        let lonDelta = objectLocation.longitude - referenceLocation.longitude
+        
+        // Convert latitude/longitude differences to meters
+        let x = Float(lonDelta * metersPerDegree)
+        let z = Float(-latDelta * metersPerDegree) // Negative for ARKit's coordinate system
+        
+        return SIMD3<Float>(x, 0, z)
+    }
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero)
         
         // Configure AR session for world tracking
-        let config = ARWorldTrackingConfiguration()
-        config.planeDetection = []
-        config.environmentTexturing = .automatic
+        let worldConfig = ARWorldTrackingConfiguration()
+        worldConfig.environmentTexturing = .automatic
+        worldConfig.planeDetection = [.horizontal, .vertical]
+        let config = worldConfig
+        
         arView.session.run(config, options: [])
+        arView.session.delegate = context.coordinator
 
         // Setup display link for animations (can be done early)
         let revolutionDuration: TimeInterval = 1.5 // 1 revolution per 1.5 seconds
@@ -35,15 +61,18 @@ struct ARViewContainer: UIViewRepresentable {
             var anchors: [AnchorEntity] = []
 
             if self.objectType != .none { // Need self here due to closure
-                // Use slider values for position, converting feet to meters
-            let z: Float = -distanceInFeet * feetToMeters // Distance from user
-            let y: Float = heightInFeet * feetToMeters    // Height from ground (ARKit origin)
-            let spacing: Float = 0.2 // Only relevant for multiple objects (coins)
-            let positions: [SIMD3<Float>] = [
-                [-spacing, y, z], // Left position (for coins)
-                [0,       y, z],
-                [spacing, y, z]
-            ]
+                guard let objectLocation = self.objectLocation,
+                      let referenceLocation = self.referenceLocation else {
+                print("Missing location data")
+                return
+            }
+            
+            let arPosition = convertToARWorldCoordinate(
+                objectLocation: objectLocation,
+                referenceLocation: referenceLocation
+            )
+            
+            let positions: [SIMD3<Float>] = [arPosition]
 
             // Use all positions for coins, but only the center one for dollar signs
             let positionsToUse = (objectType == .dollarSign) ? [positions[1]] : positions
@@ -91,25 +120,15 @@ struct ARViewContainer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
-        // Called when bindings change (distanceInFeet, heightInFeet)
-        // Calculate new position based on slider values
-        let newZ: Float = -distanceInFeet * feetToMeters
-        let newY: Float = heightInFeet * feetToMeters
-
-        // Update the position of all existing anchors smoothly
-        for anchor in context.coordinator.anchors {
-            // Keep the original X position, update Y and Z
-            let currentX = anchor.transform.translation.x
-            anchor.transform.translation = SIMD3<Float>(currentX, newY, newZ)
-        }
+        // Empty but required
     }
-
+    
     func makeCoordinator() -> Coordinator {
         // Pass the objectType when creating the Coordinator
         Coordinator(objectType: objectType)
     }
 
-    class Coordinator {
+    class Coordinator: NSObject, ARSessionDelegate {
         var objectType: ARObjectType // Store object type
         var onCoinCollected: (() -> Void)?
         var coinEntities: [ModelEntity] = []
