@@ -131,7 +131,11 @@ struct ContentView: View {
                 }
                     .onChange(of: selectedObject) { newValue in
                         if newValue != .none {
-                            objectLocation = nil
+                            // Set hardcoded coordinates for testing
+                            objectLocation = CLLocationCoordinate2D(
+                                latitude: 35.67226767113417,
+                                longitude: -78.75162204749381
+                            )
                         }
                     }
         .onReceive(locationManager.$currentLocation) { location in
