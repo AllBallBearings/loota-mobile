@@ -15,16 +15,22 @@ struct ContentView: View {
     @State private var animate: Bool = false
     @State private var selectedObject: ARObjectType = .none
     @State private var currentLocation: CLLocationCoordinate2D?
-    @State private var objectLocation: CLLocationCoordinate2D?
+    @State private var objectLocations: [CLLocationCoordinate2D] = [] // Changed to array
     @StateObject private var locationManager = LocationManager()
+    
+    // Helper struct for JSON decoding
+    struct PinLocation: Codable {
+        let lat: Double
+        let lng: Double
+    }
     
     var body: some View {
         ZStack {
             // Main container ZStack
             // AR View in the background
-            if selectedObject != .none {
+            if selectedObject != .none && !objectLocations.isEmpty { // Check if locations array is not empty
                 ARViewContainer(
-                    objectLocation: $objectLocation,
+                    objectLocations: $objectLocations, // Pass array binding
                     referenceLocation: $locationManager.currentLocation,
                     onCoinCollected: {
                         coinsCollected += 1
@@ -109,15 +115,22 @@ struct ContentView: View {
                         .background(Color.white)
                         .padding(.vertical, 4)
                     
-                    Text("Object Location:")
+                    Text("Object Locations (\(objectLocations.count)):") // Show count
                         .font(.headline)
                         .foregroundColor(.white)
-                    Text(String(format: "%.6f", objectLocation?.latitude ?? 0))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.yellow)
-                    Text(String(format: "%.6f", objectLocation?.longitude ?? 0))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.yellow)
+                    // Optionally display the first object's location or just the count
+                    if let firstLocation = objectLocations.first {
+                        Text(String(format: "%.6f", firstLocation.latitude))
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.yellow)
+                        Text(String(format: "%.6f", firstLocation.longitude))
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.yellow)
+                    } else {
+                         Text("N/A")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.yellow)
+                    }
                 }
                 .padding()
                 .background(Color.black.opacity(0.6))
@@ -126,13 +139,13 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedObject) { newValue in
-            if newValue != .none {
-                // Set hardcoded coordinates for testing
-                objectLocation = CLLocationCoordinate2D(
-                    latitude: 35.67226767113417,
-                    longitude: -78.75162204749381
-                )
+            // Clear locations when object type changes to none.
+            // Locations are now only set via launch argument/URL parsing.
+            if newValue == .none {
+                 objectLocations = []
+                 print("Object type set to None, clearing locations.")
             }
+            // We no longer set a hardcoded location here.
         }
         .onReceive(locationManager.$currentLocation) { location in
             currentLocation = location
@@ -143,46 +156,78 @@ struct ContentView: View {
             // For simplicity, we'll focus on location functionality
             // and remove the URL handling for now
             locationManager.startUpdating()
+
+            // Check for launch arguments
+            let arguments = ProcessInfo.processInfo.arguments
+            if let urlIndex = arguments.firstIndex(of: "-appLaunchURL"), urlIndex + 1 < arguments.count {
+                let urlString = arguments[urlIndex + 1]
+                if let url = URL(string: urlString) {
+                    print("Received launch argument URL: \(url)")
+                    parsePinsFromURL(url)
+                } else {
+                    print("Failed to create URL from launch argument: \(urlString)")
+                }
+            }
         }
-        .onOpenURL { url in
-            print("Received URL: \(url)")
-            parsePinsFromURL(url)
-        }
+        // .onOpenURL can be added back later if needed for real URL launches
+        // .onOpenURL { url in
+        //     print("Received URL via onOpenURL: \(url)")
+        //     parsePinsFromURL(url)
+        // }
     }
-    
+
     func parsePinsFromURL(_ url: URL) {
-        // Extract query items from URL
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+        print("Attempting to parse URL: \(url)")
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true), // Use true for file URLs
               let queryItems = components.queryItems else {
-            print("No query items found in URL")
+            print("Could not create URLComponents or find query items.")
             return
         }
-        
-        // Find the "pins" parameter
-        let pinsItem = queryItems.first { $0.name == "pins" }
-        guard let pinsData = pinsItem?.value else {
-            print("No 'pins' parameter found in URL")
+
+        guard let pinsParam = queryItems.first(where: { $0.name == "pins" })?.value else {
+            print("No 'pins' parameter found in URL query.")
             return
         }
-        
-        // Decode base64 data
-        guard let decodedData = Data(base64Encoded: pinsData),
-              let decodedString = String(data: decodedData, encoding: .utf8) else {
-            print("Failed to decode base64 'pins' parameter")
+        print("Found pins parameter: \(pinsParam)")
+
+        guard let decodedData = Data(base64Encoded: pinsParam) else {
+            print("Failed to decode base64 string.")
             return
         }
-        
-        // Split into latitude and longitude
-        let coordinates = decodedString.components(separatedBy: ",")
-        guard coordinates.count == 2,
-              let latitude = Double(coordinates[0]),
-              let longitude = Double(coordinates[1]) else {
-            print("Invalid coordinate format in 'pins' parameter")
-            return
+        print("Successfully decoded base64 data.")
+
+        do {
+            let decoder = JSONDecoder()
+            let pinLocations = try decoder.decode([PinLocation].self, from: decodedData)
+            print("Successfully decoded JSON: \(pinLocations.count) locations")
+            
+            // Convert decoded structs to CLLocationCoordinate2D and update state
+            self.objectLocations = pinLocations.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+            print("Updated objectLocations state with \(self.objectLocations.count) coordinates.")
+            
+            // Ensure an object type is selected if we received locations
+            if !self.objectLocations.isEmpty && self.selectedObject == .none {
+                self.selectedObject = .coin // Default to coin if none selected
+                print("Defaulted selectedObject to .coin")
+            }
+            
+        } catch {
+            print("Failed to decode JSON: \(error)")
+            // Attempt fallback for single coordinate format (lat,lng)
+            if let decodedString = String(data: decodedData, encoding: .utf8) {
+                 let coordinates = decodedString.components(separatedBy: ",")
+                 if coordinates.count == 2,
+                    let latitude = Double(coordinates[0]),
+                    let longitude = Double(coordinates[1]) {
+                     self.objectLocations = [CLLocationCoordinate2D(latitude: latitude, longitude: longitude)]
+                     print("Fallback: Parsed single coordinate: \(latitude), \(longitude)")
+                     if self.selectedObject == .none { self.selectedObject = .coin }
+                 } else {
+                     print("Fallback failed: Invalid single coordinate format.")
+                 }
+            } else {
+                 print("Fallback failed: Could not decode data as UTF8 string.")
+            }
         }
-        
-        // Update object location and log coordinates
-        objectLocation = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        print("Extracted coordinates: \(latitude), \(longitude)")
     }
 }
