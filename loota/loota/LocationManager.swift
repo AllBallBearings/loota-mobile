@@ -13,16 +13,15 @@ class LocationManager: NSObject, ObservableObject {
     
     func requestAuthorization() {
         locationManager.requestWhenInUseAuthorization()
+    }
+    
+    func startUpdating() {
         if CLLocationManager.locationServicesEnabled() {
             locationManager.startUpdatingLocation()
         }
     }
-    
-    func startUpdating() {
-        locationManager.startUpdatingLocation()
-    }
-    
 }
+    
 
 extension LocationManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
