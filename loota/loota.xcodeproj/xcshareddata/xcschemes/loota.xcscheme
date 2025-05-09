@@ -80,7 +80,7 @@
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "file:///Users/jaredgoolsby/Documents/Github/loota/index.html?pins=W3sibGF0IjozNS42NzIwOTgsImxuZyI6LTc4Ljc1MTc5NX0seyJsYXQiOjM1LjY3MjE0NywibG5nIjotNzguNzUxODI5fSx7ImxhdCI6MzUuNjcyMTY5LCJsbmciOi03OC43NTE3ODZ9LHsibGF0IjozNS42NzIxNDgsImxuZyI6LTc4Ljc1MTc4Mn0seyJsYXQiOjM1LjY3MjEzNiwibG5nIjotNzguNzUxNzU5fV0="
+            argument = "file:///Users/jaredgoolsby/Documents/Github/loota/index.html?pins=W3sibGF0IjozNS42NzIxMzUsImxuZyI6LTc4Ljc1MTc2Nn1d"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
