@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var selectedObject: ARObjectType = .none
     @State private var currentLocation: CLLocationCoordinate2D?
     @State private var objectLocations: [CLLocationCoordinate2D] = [] // Changed to array
+    @State private var statusMessage: String = "" // Add status message state
     @StateObject private var locationManager = LocationManager()
     
     // Helper struct for JSON decoding
@@ -28,10 +29,14 @@ struct ContentView: View {
         ZStack {
             // Main container ZStack
             // AR View in the background
+            let _ = print("ContentView body: selectedObject = \(selectedObject.rawValue), objectLocations.count = \(objectLocations.count), refLocation = \(String(describing: locationManager.currentLocation)), heading = \(String(describing: locationManager.heading?.trueHeading))")
             if selectedObject != .none && !objectLocations.isEmpty { // Check if locations array is not empty
+                let _ = print("ContentView: ARViewContainer WILL be created.")
                 ARViewContainer(
                     objectLocations: $objectLocations, // Pass array binding
                     referenceLocation: $locationManager.currentLocation,
+                    statusMessage: $statusMessage, // Add status message binding
+                    heading: $locationManager.heading, // Pass heading binding
                     onCoinCollected: {
                         coinsCollected += 1
                         withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
@@ -42,16 +47,17 @@ struct ContentView: View {
                             animate = false
                         }
                     },
-                    objectType: selectedObject
+                    objectType: $selectedObject // Use $ to pass the binding
                 )
                 .id(selectedObject) // Recreate only when object type changes
                 .edgesIgnoringSafeArea(.all)
             } else {
                  // Placeholder when no object is selected
                  Color.gray.edgesIgnoringSafeArea(.all)
-                 Text("Select an object type")
+                 Text("Select an object type (or provide object locations)")
                      .foregroundColor(.white)
                      .font(.title)
+                 let _ = print("ContentView: ARViewContainer WILL NOT be created. selectedObject: \(selectedObject.rawValue), objectLocations.isEmpty: \(objectLocations.isEmpty)")
             }
 
             // UI Overlay VStack
@@ -118,6 +124,12 @@ struct ContentView: View {
                     Text("Object Locations (\(objectLocations.count)):") // Show count
                         .font(.headline)
                         .foregroundColor(.white)
+                    
+                    // Status message display
+                    Text(statusMessage)
+                        .font(.headline)
+                        .foregroundColor(.yellow)
+                        .padding(.top, 8)
                     // Optionally display the first object's location or just the count
                     if let firstLocation = objectLocations.first {
                         Text(String(format: "%.6f", firstLocation.latitude))
@@ -143,14 +155,21 @@ struct ContentView: View {
             // Locations are now only set via launch argument/URL parsing.
             if newValue == .none {
                  objectLocations = []
-                 print("Object type set to None, clearing locations.")
+                 print("ContentView onChange selectedObject: \(newValue.rawValue) - Object type set to None, clearing locations.")
+            } else {
+                print("ContentView onChange selectedObject: \(newValue.rawValue)")
             }
             // We no longer set a hardcoded location here.
         }
         .onReceive(locationManager.$currentLocation) { location in
             currentLocation = location
+            print("ContentView onReceive: Updated currentLocation: \(String(describing: location))")
+        }
+        .onReceive(locationManager.$heading) { newHeading in
+            print("ContentView onReceive: Updated heading: \(String(describing: newHeading?.trueHeading))")
         }
         .onAppear {
+            print("ContentView onAppear: Requesting authorization and starting updates.")
             locationManager.requestAuthorization()
             
             // For simplicity, we'll focus on location functionality
@@ -162,12 +181,15 @@ struct ContentView: View {
             if let urlIndex = arguments.firstIndex(of: "-appLaunchURL"), urlIndex + 1 < arguments.count {
                 let urlString = arguments[urlIndex + 1]
                 if let url = URL(string: urlString) {
-                    print("Received launch argument URL: \(url)")
+                    print("ContentView onAppear: Received launch argument URL: \(url)")
                     parsePinsFromURL(url)
                 } else {
-                    print("Failed to create URL from launch argument: \(urlString)")
+                    print("ContentView onAppear: Failed to create URL from launch argument: \(urlString)")
                 }
+            } else {
+                print("ContentView onAppear: No -appLaunchURL argument found.")
             }
+            print("ContentView onAppear: objectLocations.count = \(objectLocations.count), selectedObject = \(selectedObject.rawValue)")
         }
         // .onOpenURL can be added back later if needed for real URL launches
         // .onOpenURL { url in
@@ -177,42 +199,42 @@ struct ContentView: View {
     }
 
     func parsePinsFromURL(_ url: URL) {
-        print("Attempting to parse URL: \(url)")
+        print("ContentView parsePinsFromURL: Attempting to parse URL: \(url)")
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true), // Use true for file URLs
               let queryItems = components.queryItems else {
-            print("Could not create URLComponents or find query items.")
+            print("ContentView parsePinsFromURL: Could not create URLComponents or find query items.")
             return
         }
 
         guard let pinsParam = queryItems.first(where: { $0.name == "pins" })?.value else {
-            print("No 'pins' parameter found in URL query.")
+            print("ContentView parsePinsFromURL: No 'pins' parameter found in URL query.")
             return
         }
-        print("Found pins parameter: \(pinsParam)")
+        print("ContentView parsePinsFromURL: Found pins parameter: \(pinsParam)")
 
         guard let decodedData = Data(base64Encoded: pinsParam) else {
-            print("Failed to decode base64 string.")
+            print("ContentView parsePinsFromURL: Failed to decode base64 string.")
             return
         }
-        print("Successfully decoded base64 data.")
+        print("ContentView parsePinsFromURL: Successfully decoded base64 data.")
 
         do {
             let decoder = JSONDecoder()
             let pinLocations = try decoder.decode([PinLocation].self, from: decodedData)
-            print("Successfully decoded JSON: \(pinLocations.count) locations")
+            print("ContentView parsePinsFromURL: Successfully decoded JSON: \(pinLocations.count) locations")
             
             // Convert decoded structs to CLLocationCoordinate2D and update state
             self.objectLocations = pinLocations.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-            print("Updated objectLocations state with \(self.objectLocations.count) coordinates.")
+            print("ContentView parsePinsFromURL: Updated objectLocations state with \(self.objectLocations.count) coordinates.")
             
             // Ensure an object type is selected if we received locations
             if !self.objectLocations.isEmpty && self.selectedObject == .none {
                 self.selectedObject = .coin // Default to coin if none selected
-                print("Defaulted selectedObject to .coin")
+                print("ContentView parsePinsFromURL: Defaulted selectedObject to .coin")
             }
             
         } catch {
-            print("Failed to decode JSON: \(error)")
+            print("ContentView parsePinsFromURL: Failed to decode JSON: \(error)")
             // Attempt fallback for single coordinate format (lat,lng)
             if let decodedString = String(data: decodedData, encoding: .utf8) {
                  let coordinates = decodedString.components(separatedBy: ",")
@@ -220,13 +242,13 @@ struct ContentView: View {
                     let latitude = Double(coordinates[0]),
                     let longitude = Double(coordinates[1]) {
                      self.objectLocations = [CLLocationCoordinate2D(latitude: latitude, longitude: longitude)]
-                     print("Fallback: Parsed single coordinate: \(latitude), \(longitude)")
+                     print("ContentView parsePinsFromURL: Fallback: Parsed single coordinate: \(latitude), \(longitude)")
                      if self.selectedObject == .none { self.selectedObject = .coin }
                  } else {
-                     print("Fallback failed: Invalid single coordinate format.")
+                     print("ContentView parsePinsFromURL: Fallback failed: Invalid single coordinate format.")
                  }
             } else {
-                 print("Fallback failed: Could not decode data as UTF8 string.")
+                 print("ContentView parsePinsFromURL: Fallback failed: Could not decode data as UTF8 string.")
             }
         }
     }
