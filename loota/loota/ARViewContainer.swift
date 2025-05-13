@@ -1,34 +1,46 @@
 // ARViewContainer.swift
 
 import SwiftUI
+import ARKit
 import RealityKit
 import CoreLocation
-import ARKit
 import AVFoundation
 import Combine // Import Combine for sink
 
+extension CLLocationDirection {
+    var degreesToRadians: Double { return self * .pi / 180 }
+}
+
+import ARKit
+
 struct ARViewContainer: UIViewRepresentable {
     @Binding var objectLocations: [CLLocationCoordinate2D] // Changed to array
-    @Binding var referenceLocation: CLLocationCoordinate2D?
+    var referenceLocation: CLLocationCoordinate2D? // Changed back to var
     @Binding var statusMessage: String // Add status message binding
     @Binding var heading: CLHeading? // Add heading binding
     var onCoinCollected: (() -> Void)?
     @Binding var objectType: ARObjectType // Changed to @Binding
+    @Binding var currentHuntType: HuntType? // Add new binding for hunt type
+    @Binding var proximityMarkers: [ProximityMarkerData] // Add new binding for proximity data
 
     // Correct initializer signature
     public init(objectLocations: Binding<[CLLocationCoordinate2D]>,
-               referenceLocation: Binding<CLLocationCoordinate2D?>,
+               referenceLocation: CLLocationCoordinate2D?, // Changed back to non-Binding
                statusMessage: Binding<String>, // Add status message binding
                heading: Binding<CLHeading?>, // Add heading binding
                onCoinCollected: (() -> Void)? = nil,
-               objectType: Binding<ARObjectType>) { // Changed to Binding<ARObjectType>
-        print("ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation.wrappedValue)), heading=\(String(describing: heading.wrappedValue?.trueHeading))")
+               objectType: Binding<ARObjectType>, // Changed to Binding<ARObjectType>
+               currentHuntType: Binding<HuntType?>, // Add new parameter
+               proximityMarkers: Binding<[ProximityMarkerData]>) { // Add new parameter
+        print("ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation)), heading=\(String(describing: heading.wrappedValue?.trueHeading)), huntType=\(String(describing: currentHuntType.wrappedValue)), proximityMarkers.count=\(proximityMarkers.wrappedValue.count))")
         self._objectLocations = objectLocations
-        self._referenceLocation = referenceLocation
+        self.referenceLocation = referenceLocation // Assign direct value
         self._statusMessage = statusMessage
         self._heading = heading // Assign heading binding
         self.onCoinCollected = onCoinCollected
         self._objectType = objectType // Changed to assign to _objectType
+        self._currentHuntType = currentHuntType // Assign new binding
+        self._proximityMarkers = proximityMarkers // Assign new binding
     }
 
     // GPS conversion constants are now in Coordinator
@@ -39,7 +51,7 @@ struct ARViewContainer: UIViewRepresentable {
         print("ARViewContainer makeUIView called.")
         // Reset alignment flag for debugging, to ensure alignment is attempted each time view is made
         // context.coordinator.hasAlignedToNorth = false // Potentially problematic if coordinator is reused; better to do this in init if needed
-        // For now, let's rely on the Coordinator's own initialization of hasAlignedToNorth = false
+        // For now, let&#x27;s rely on the Coordinator&#x27;s own initialization of hasAlignedToNorth = false
 
         let arView = ARView(frame: .zero)
 
@@ -67,7 +79,8 @@ struct ARViewContainer: UIViewRepresentable {
         // placeObjectsAction is set in makeCoordinator and captures the necessary bindings.
 
         // Initial placement of objects will now be triggered by the heading observer in the coordinator
-        // updateObjectPlacement(arView: arView, context: context) // Removed initial call here
+        // Replaced updateObjectPlacement with a direct call to the coordinator's method
+        context.coordinator.placeObjectsInARView(arView: arView)
 
         return arView
     }
@@ -83,38 +96,43 @@ struct ARViewContainer: UIViewRepresentable {
         
         context.coordinator.onCoinCollected = self.onCoinCollected
         
-        let oldCoordHeading = context.coordinator.heading?.trueHeading
-        let newStructHeading = self.heading?.trueHeading
-        if oldCoordHeading != newStructHeading {
-            context.coordinator.heading = self.heading
-            print("ARViewContainer updateUIView: Updated coordinator.heading to \(String(describing: newStructHeading))")
-        }
+let oldCoordHeading = context.coordinator.heading?.trueHeading
+let newStructHeading = self.heading?.trueHeading
+if oldCoordHeading != newStructHeading {
+    context.coordinator.heading = self.heading
+    print("ARViewContainer updateUIView: Updated coordinator.heading to \(String(describing: newStructHeading))")
+}
 
         context.coordinator.attemptPlacementIfReady()
         
         // beyond what @Binding provides, that would be handled here or via Combine publishers.
         // For now, the Coordinator's heading.didSet is the main trigger for initial placement.
+        // Force initial placement if heading is already available
+        if let heading = self.heading {
+            context.coordinator.heading = heading
+        }
     }
 
     func makeCoordinator() -> Coordinator {
         // Initialize coordinator with the initial wrapped value of referenceLocation
         let coordinator = Coordinator(
-            initialReferenceLocation: self.referenceLocation, // Pass wrapped value
+            initialReferenceLocation: self.referenceLocation, // Pass direct value
             objectLocations: $objectLocations,
             objectType: $objectType,
-            statusMessage: $statusMessage
+            statusMessage: $statusMessage,
+            currentHuntType: $currentHuntType, // Pass binding
+            proximityMarkers: $proximityMarkers  // Pass binding
         )
         // Set the placeObjectsAction on the newly created coordinator instance
-        // The coordinator's placeObjectsAction will call its own placeObjectsInARView method.
+        // The coordinator&#x27;s placeObjectsAction will call its own placeObjectsInARView method.
         coordinator.placeObjectsAction = coordinator.placeObjectsInARView 
         return coordinator
     }
     
     // placeObjects, createEntity, convertToARWorldCoordinate are now moved to Coordinator
 
-
     // MARK: - Coordinator Class
-    
+
     class Coordinator: NSObject, ARSessionDelegate {
         // referenceLocation is now a simple var, updated by ARViewContainer.updateUIView
         var referenceLocation: CLLocationCoordinate2D?
@@ -122,6 +140,9 @@ struct ARViewContainer: UIViewRepresentable {
         @Binding var objectLocations: [CLLocationCoordinate2D]
         @Binding var objectType: ARObjectType
         @Binding var statusMessage: String
+        @Binding var currentHuntType: HuntType? // Added binding
+        @Binding var proximityMarkers: [ProximityMarkerData] // Added binding
+        // Removed the redundant @Binding for heading here. We use the simple var heading below.
 
         var onCoinCollected: (() -> Void)?
         var coinEntities: [ModelEntity] = []
@@ -164,7 +185,7 @@ struct ARViewContainer: UIViewRepresentable {
 
         // Combine cancellables for observing changes
         private var cancellables: Set<AnyCancellable> = []
-
+        
         // GPS conversion constants
         private let metersPerDegree: Double = 111319.5
 
@@ -172,14 +193,21 @@ struct ARViewContainer: UIViewRepresentable {
         init(initialReferenceLocation: CLLocationCoordinate2D?, // Changed from Binding
              objectLocations: Binding<[CLLocationCoordinate2D]>,
              objectType: Binding<ARObjectType>,
-             statusMessage: Binding<String>) {
+             statusMessage: Binding<String>,
+             currentHuntType: Binding<HuntType?>, // Added parameter
+             proximityMarkers: Binding<[ProximityMarkerData]>) { // Added parameter
             print("Coordinator init: Setting up.")
             self.referenceLocation = initialReferenceLocation // Assign initial value
             self._objectLocations = objectLocations
             self._objectType = objectType
             self._statusMessage = statusMessage
+            self._currentHuntType = currentHuntType // Assign binding
+            self._proximityMarkers = proximityMarkers // Assign binding
+            
+            // Removed problematic referenceLocationObserver
+            
             super.init()
-            print("Coordinator init: Initial referenceLocation = \(String(describing: self.referenceLocation))")
+            print("Coordinator init: Initial referenceLocation = \(String(describing: initialReferenceLocation)))")
         }
         
         // Helper function for degree to radian conversion
@@ -192,6 +220,12 @@ struct ARViewContainer: UIViewRepresentable {
             guard hasAlignedToNorth, self.referenceLocation != nil, !hasPlacedObjects, let arView = self.arView else {
                 print("Coordinator attemptPlacementIfReady: Conditions not met or already placed.")
                 return
+            }
+            
+            // Force placement if we have a valid reference location
+            if self.referenceLocation != nil {
+                self.placeObjectsAction?(arView)
+                self.hasPlacedObjects = true
             }
             
             print("Coordinator attemptPlacementIfReady: All conditions MET. Calling placeObjectsAction.")
@@ -212,55 +246,120 @@ struct ARViewContainer: UIViewRepresentable {
         // Main object placement logic, now using Coordinator's bindings
         private func placeObjects(arView: ARView) {
             print("Coordinator placeObjects: Checking referenceLocation. Current referenceLocation = \(String(describing: self.referenceLocation))")
-            // Use self.referenceLocation (which is now a simple var)
             guard let refLoc = self.referenceLocation else {
                 print("Coordinator placeObjects: Guard FAILED - self.referenceLocation is nil.")
                 return
             }
-            // Use self.objectLocations (the binding's wrappedValue)
-            guard !self.objectLocations.isEmpty else {
-                print("Coordinator placeObjects: Guard FAILED - objectLocations is empty.")
-                return
-            }
-            // Use self.objectType (the binding's wrappedValue)
-            guard self.objectType != .none else {
-                print("Coordinator placeObjects: Guard FAILED - objectType is .none.")
-                return
-            }
-            
-            print("Coordinator placeObjects: Called with objectType=\(self.objectType.rawValue), objectLocations.count=\(self.objectLocations.count), refLoc=\(refLoc)")
-            
+
             self.clearAnchors()
 
             var newEntities: [ModelEntity] = []
             var newAnchors: [AnchorEntity] = []
 
-            print("Coordinator placeObjects: Placing \(self.objectLocations.count) objects of type \(self.objectType.rawValue)")
-
-            for location in self.objectLocations {
-                print("Coordinator placeObjects: Processing location \(location)")
-                let arPosition = convertToARWorldCoordinate(objectLocation: location, referenceLocation: refLoc)
-                let anchor = AnchorEntity(world: arPosition)
-                guard let entity = createEntity(for: self.objectType) else { continue }
-                anchor.addChild(entity)
-                
-                if let baseAnchor = self.baseAnchor {
-                    baseAnchor.addChild(anchor)
-                    print("Coordinator placeObjects: Added anchor to self.baseAnchor")
-                } else {
-                    arView.scene.addAnchor(anchor)
-                    print("Coordinator placeObjects: WARNING - Added anchor directly to arView.scene (self.baseAnchor not found)")
+            // Check the hunt type
+            switch self.currentHuntType { // Access wrapped value directly
+            case .geolocation:
+                print("Coordinator placeObjects: Handling Geolocation hunt.")
+                guard !self.objectLocations.isEmpty else { // Access wrapped value directly
+                    print("Coordinator placeObjects: Guard FAILED - objectLocations is empty for geolocation hunt.")
+                    return
                 }
-                newEntities.append(entity)
-                newAnchors.append(anchor)
+                guard self.objectType != .none else { // Access wrapped value directly
+                    print("Coordinator placeObjects: Guard FAILED - objectType is .none for geolocation hunt.")
+                    return
+                }
+
+                print("Coordinator placeObjects: Placing \(self.objectLocations.count) objects of type \(self.objectType.rawValue)") // Access wrapped values directly
+
+                for location in self.objectLocations { // Iterate over wrapped value directly
+                    print("Coordinator placeObjects: Processing location \(location)")
+                    let arPosition = convertToARWorldCoordinate(objectLocation: location, referenceLocation: refLoc)
+                    let anchor = AnchorEntity(world: arPosition)
+                    guard let entity = createEntity(for: self.objectType) else { continue } // Access wrapped value directly
+                    anchor.addChild(entity)
+
+                    if let baseAnchor = self.baseAnchor {
+                        baseAnchor.addChild(anchor)
+                        print("Coordinator placeObjects: Added anchor to self.baseAnchor")
+                    } else {
+                        arView.scene.addAnchor(anchor)
+                        print("Coordinator placeObjects: WARNING - Added anchor directly to arView.scene (self.baseAnchor not found)")
+                    }
+                    newEntities.append(entity)
+                    newAnchors.append(anchor)
+                }
+
+            case .proximity:
+                print("Coordinator placeObjects: Handling Proximity hunt.")
+                guard !self.proximityMarkers.isEmpty else { // Access wrapped value directly
+                    print("Coordinator placeObjects: Guard FAILED - proximityMarkers is empty for proximity hunt.")
+                    return
+                }
+                // For proximity, we'll default to placing Coin entities as discussed
+                let objectTypeForProximity: ARObjectType = .coin
+                guard objectTypeForProximity != .none else {
+                     print("Coordinator placeObjects: Guard FAILED - objectType for proximity is .none.")
+                     return
+                }
+
+                print("Coordinator placeObjects: Placing \(self.proximityMarkers.count) objects for proximity hunt (type: \(objectTypeForProximity.rawValue))") // Access wrapped value directly
+
+                for marker in self.proximityMarkers { // Iterate over wrapped value directly
+                    print("Coordinator placeObjects: Processing proximity marker: Dist=\(marker.dist), Dir=\(marker.dir)")
+
+                    guard let headingRadians = self.heading?.trueHeading.degreesToRadians else {
+                         print("Coordinator placeObjects: Skipping proximity marker placement - Heading not available.")
+                         continue // Cannot place proximity markers without a valid heading
+                    }
+
+                    guard let markerAngleRadians = parseDirectionStringToRadians(dir: marker.dir) else {
+                         print("Coordinator placeObjects: Skipping proximity marker placement - Failed to parse direction string: \(marker.dir)")
+                         continue // Cannot place proximity markers without a valid direction
+                    }
+
+                    // Calculate the position relative to the base anchor (which is rotated to align Z with North)
+                    // A marker at distance D and direction M degrees from North should be placed at:
+                    // x = D * sin(M_radians)
+                    // z = -D * cos(M_radians) // Negative Z because ARKit's Z is typically forward/south
+                    // Y is typically 0 for objects on the ground plane.
+
+                    let x = Float(marker.dist * sin(Double(markerAngleRadians)))
+                    let z = Float(-marker.dist * cos(Double(markerAngleRadians))) // Negative Z for forward
+
+                    let arPosition = SIMD3<Float>(x, 0, z) // Position relative to the base anchor (aligned to North)
+
+                    let anchor = AnchorEntity(world: arPosition)
+                    guard let entity = createEntity(for: objectTypeForProximity) else { continue }
+                    anchor.addChild(entity)
+
+                    if let baseAnchor = self.baseAnchor {
+                        baseAnchor.addChild(anchor)
+                        print("Coordinator placeObjects: Added proximity anchor to self.baseAnchor at position \(arPosition)")
+                    } else {
+                        arView.scene.addAnchor(anchor)
+                        print("Coordinator placeObjects: WARNING - Added proximity anchor directly to arView.scene (self.baseAnchor not found) at position \(arPosition)")
+                    }
+                    newEntities.append(entity)
+                    newAnchors.append(anchor)
+                }
+
+            case .none:
+                print("Coordinator placeObjects: No hunt type specified.")
+                self.statusMessage = "No hunt data loaded."
+                return // Exit if no hunt type
+            case .some(let actualHuntType): // Handle any other potential future hunt types
+                print("Coordinator placeObjects: Unhandled hunt type: \(actualHuntType)") // Use the unwrapped value
+                self.statusMessage = "Unsupported hunt type."
+                return
             }
 
+            // Status message and entity/anchor updates are done after the switch
             self.statusMessage = "Loot placed successfully!"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 self.statusMessage = ""
             }
-            
-            self.coinEntities = newEntities
+
+            self.coinEntities = newEntities // Rename this to placedEntities or similar? Keeping for now.
             self.anchors = newAnchors
             print("Coordinator updated with \(newAnchors.count) anchors/entities.")
         }
@@ -326,9 +425,9 @@ struct ARViewContainer: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.statusMessage = "Aligned to North" // Access wrapped value directly
                 // Reset status message after 2 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                    self.statusMessage = "" // Access wrapped value directly
-                }
+                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                     self.statusMessage = "" // Access wrapped value directly
+                 }
             }
         }
 
@@ -451,6 +550,90 @@ struct ARViewContainer: UIViewRepresentable {
             // We only need the heading for initial alignment.
             // The heading is passed via the binding and observed in the Coordinator's didSet.
             // No need to process heading here if it's handled by the binding.
+        }
+
+        // Helper function to parse direction string (e.g., "N32E") into radians
+        // Assuming format "Cardinal Degrees Cardinal" e.g., "N32E", "S45W", "E90S", "W0N" (pure West)
+        // Angle is clockwise from North (positive Z in AR world after alignment)
+        private func parseDirectionStringToRadians(dir: String) -> Float? {
+            let pattern = #"^([NESW])(\d*)?([NESW])?$"#
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+                  let match = regex.firstMatch(in: dir, options: [], range: NSRange(location: 0, length: dir.utf16.count)) else {
+                print("Failed to parse direction string format: \(dir)")
+                return nil
+            }
+
+            var angleDegrees: Double = 0
+            var baseAngle: Double = 0 // Angle for the first cardinal (N=0, E=90, S=180, W=270)
+            var deflectionAngle: Double = 0 // Degrees after the first cardinal
+            var deflectionDirection: Int = 1 // 1 for E/N (clockwise from base), -1 for W/S (counter-clockwise from base)
+
+            // Extract components
+            if match.numberOfRanges > 1, let range1 = Range(match.range(at: 1), in: dir) {
+                let cardinal1 = String(dir[range1])
+                switch cardinal1 {
+                case "N": baseAngle = 0
+                case "E": baseAngle = 90
+                case "S": baseAngle = 180
+                case "W": baseAngle = 270
+                default: return nil // Should not happen with regex
+                }
+            } else { return nil }
+
+            if match.numberOfRanges > 2, let range2 = Range(match.range(at: 2), in: dir), !range2.isEmpty {
+                if let degrees = Double(dir[range2]) {
+                    deflectionAngle = degrees
+                } else {
+                     // Handle cases like "N" or "E" without degrees
+                     deflectionAngle = 0
+                }
+            } else {
+                     // Handle cases like "N" or "E" without degrees
+                     deflectionAngle = 0
+            }
+
+            if match.numberOfRanges > 3, let range3 = Range(match.range(at: 3), in: dir) {
+                let cardinal2 = String(dir[range3])
+                // Determine deflection direction based on cardinal1 and cardinal2
+                // If cardinal1 is N or S, cardinal2 determines E (+deflection) or W (-deflection)
+                // If cardinal1 is E or W, cardinal2 determines N (+deflection from E/W base) or S (-deflection from E/W base)
+                switch (dir.prefix(1), cardinal2) {
+                case ("N", "E"), ("E", "S"), ("S", "W"), ("W", "N"):
+                    deflectionDirection = 1 // Clockwise deflection from base
+                case ("N", "W"), ("E", "N"), ("S", "E"), ("W", "S"):
+                    deflectionDirection = -1 // Counter-clockwise deflection from base
+                default:
+                     // Handle pure cardinal directions like "N", "E", "S", "W"
+                     if dir.count == 1 {
+                         deflectionAngle = 0 // No deflection for pure cardinal
+                         deflectionDirection = 1 // Doesn't matter
+                     } else {
+                         print("Failed to parse direction string format: \(dir) - Invalid cardinal combination")
+                         return nil
+                     }
+                }
+            } else {
+                 // Handle pure cardinal directions like "N", "E", "S", "W"
+                 if dir.count == 1 {
+                     deflectionAngle = 0 // No deflection for pure cardinal
+                     deflectionDirection = 1 // Doesn't matter
+                 } else {
+                     print("Failed to parse direction string format: \(dir) - Missing second cardinal")
+                     return nil
+                 }
+            }
+            
+            // Calculate final angle
+            angleDegrees = baseAngle + (deflectionAngle * Double(deflectionDirection))
+            
+            // Normalize angle to be between 0 and 360
+            angleDegrees = angleDegrees.truncatingRemainder(dividingBy: 360)
+            if angleDegrees < 0 {
+                angleDegrees += 360
+            }
+
+            print("Parsed direction string \(dir) to \(angleDegrees) degrees")
+            return Float(angleDegrees * .pi / 180.0) // Convert to radians
         }
     } // End Coordinator Class
 } // End Struct ARViewContainer

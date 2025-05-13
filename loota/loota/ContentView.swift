@@ -2,6 +2,34 @@
 
 import SwiftUI
 import CoreLocation
+import Foundation // Needed for parsing direction strings
+
+// Define HuntType enum
+enum HuntType: String, Decodable {
+    case geolocation
+    case proximity
+}
+
+// Define ProximityMarkerData struct
+struct ProximityMarkerData: Codable, Identifiable {
+    let id: UUID // Make id a let property
+    let dist: Double // Distance in meters
+    let dir: String  // Direction string, e.g., "N32E"
+
+    // Custom initializer for Codable to generate ID locally
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dist = try container.decode(Double.self, forKey: .dist)
+        dir = try container.decode(String.self, forKey: .dir)
+        id = UUID() // Generate a new UUID when decoding
+    }
+
+    // Define CodingKeys to exclude 'id' from decoding if it were present in JSON
+    enum CodingKeys: String, CodingKey {
+        case dist
+        case dir
+    }
+}
 
 enum ARObjectType: String, CaseIterable, Identifiable {
     case none = "None"
@@ -13,13 +41,16 @@ enum ARObjectType: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @State private var coinsCollected: Int = 0
     @State private var animate: Bool = false
-    @State private var selectedObject: ARObjectType = .none
+    @State private var selectedObject: ARObjectType = .none // Still used for geolocation, or maybe just default model
     @State private var currentLocation: CLLocationCoordinate2D?
-    @State private var objectLocations: [CLLocationCoordinate2D] = [] // Changed to array
+    @State private var objectLocations: [CLLocationCoordinate2D] = [] // Used for geolocation hunt
+    @State private var proximityMarkers: [ProximityMarkerData] = [] // Used for proximity hunt
     @State private var statusMessage: String = "" // Add status message state
+    @State private var currentHuntType: HuntType? // Track the active hunt type
+    
     @StateObject private var locationManager = LocationManager()
     
-    // Helper struct for JSON decoding
+    // Helper struct for JSON decoding (Geolocation)
     struct PinLocation: Codable {
         let lat: Double
         let lng: Double
@@ -29,12 +60,16 @@ struct ContentView: View {
         ZStack {
             // Main container ZStack
             // AR View in the background
-            let _ = print("ContentView body: selectedObject = \(selectedObject.rawValue), objectLocations.count = \(objectLocations.count), refLocation = \(String(describing: locationManager.currentLocation)), heading = \(String(describing: locationManager.heading?.trueHeading))")
-            if selectedObject != .none && !objectLocations.isEmpty { // Check if locations array is not empty
+            let _ = print("ContentView body: currentHuntType = \(String(describing: currentHuntType)), objectLocations.count = \(objectLocations.count), proximityMarkers.count = \(proximityMarkers.count), refLocation = \(String(describing: locationManager.currentLocation)), heading = \(String(describing: locationManager.heading?.trueHeading))")
+            
+            // Condition to show ARViewContainer based on hunt type and data availability
+            if (currentHuntType == .geolocation && !objectLocations.isEmpty) ||
+               (currentHuntType == .proximity && !proximityMarkers.isEmpty) {
+                
                 let _ = print("ContentView: ARViewContainer WILL be created.")
                 ARViewContainer(
-                    objectLocations: $objectLocations, // Pass array binding
-                    referenceLocation: $locationManager.currentLocation,
+                    objectLocations: $objectLocations, // Pass array binding (used by geolocation)
+                    referenceLocation: $locationManager.currentLocation.wrappedValue,
                     statusMessage: $statusMessage, // Add status message binding
                     heading: $locationManager.heading, // Pass heading binding
                     onCoinCollected: {
@@ -47,23 +82,38 @@ struct ContentView: View {
                             animate = false
                         }
                     },
-                    objectType: $selectedObject // Use $ to pass the binding
+                    objectType: $selectedObject, // Use $ to pass the binding (used by geolocation)
+                    currentHuntType: $currentHuntType, // Pass new binding
+                    proximityMarkers: $proximityMarkers // Pass new binding
                 )
-                .id(selectedObject) // Recreate only when object type changes
+                // Use a combined ID that changes when hunt type or relevant data changes
+                .id(currentHuntType.map { $0.rawValue } ?? "none" + "\(objectLocations.count)" + "\(proximityMarkers.count)")
                 .edgesIgnoringSafeArea(.all)
             } else {
-                 // Placeholder when no object is selected
+                 // Placeholder when no object is selected or no data loaded
                  Color.gray.edgesIgnoringSafeArea(.all)
-                 Text("Select an object type (or provide object locations)")
-                     .foregroundColor(.white)
-                     .font(.title)
-                 let _ = print("ContentView: ARViewContainer WILL NOT be created. selectedObject: \(selectedObject.rawValue), objectLocations.isEmpty: \(objectLocations.isEmpty)")
+                 VStack {
+                     Text("Select an object type or load hunt data")
+                         .foregroundColor(.white)
+                         .font(.title)
+                     
+                     // Display current hunt type and data counts for debugging
+                     Text("Hunt Type: \(currentHuntType.map { $0.rawValue } ?? "None")")
+                         .foregroundColor(.white)
+                         .font(.caption)
+                     Text("Geolocation Objects: \(objectLocations.count)")
+                         .foregroundColor(.white)
+                         .font(.caption)
+                     Text("Proximity Markers: \(proximityMarkers.count)")
+                         .foregroundColor(.white)
+                         .font(.caption)
+                 }
+                 let _ = print("ContentView: ARViewContainer WILL NOT be created. currentHuntType: \(String(describing: currentHuntType)), objectLocations.isEmpty: \(objectLocations.isEmpty), proximityMarkers.isEmpty: \(proximityMarkers.isEmpty)")
             }
 
             // UI Overlay VStack
             VStack {
-                // Top Row: Counter and Picker
-                HStack(alignment: .top) {
+                HStack(alignment: .top) { // Top Row: Counter and Object Type Display
                     // Animated counter in top left
                     ZStack {
                         Text("\(coinsCollected)")
@@ -86,26 +136,23 @@ struct ContentView: View {
                     }
                     .padding([.top, .leading], 16)
 
-                    Spacer() // Pushes picker to the right
+                    Spacer() // Pushes object type text to the right
 
-                    // Picker for object type
-                    Picker("Object", selection: $selectedObject) {
-                        ForEach(ARObjectType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
+                    // Text displaying selected object type
+                    VStack(alignment: .trailing) {
+                        Text("Object:")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                        Text(selectedObject.rawValue)
+                            .font(.headline)
+                            .foregroundColor(.yellow)
                     }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(10)
-                    .frame(maxWidth: 250) // Limit picker width
                     .padding([.top, .trailing], 16)
                 }
-                .padding(.bottom, 20) // Add padding below top controls
 
-                Spacer() // Pushes sliders to bottom/right
+                Spacer() // Pushes location display to bottom/right
 
-                // GPS Coordinates Display
+                // GPS Coordinates Display (Keep for debugging, maybe adapt for proximity?)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Your Location:")
                         .font(.headline)
@@ -121,28 +168,48 @@ struct ContentView: View {
                         .background(Color.white)
                         .padding(.vertical, 4)
                     
-                    Text("Object Locations (\(objectLocations.count)):") // Show count
-                        .font(.headline)
-                        .foregroundColor(.white)
+                    // Display info based on hunt type
+                    if currentHuntType == .geolocation {
+                        Text("Geolocation Objects (\(objectLocations.count)):")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        if let firstLocation = objectLocations.first {
+                            Text(String(format: "%.6f", firstLocation.latitude))
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.yellow)
+                            Text(String(format: "%.6f", firstLocation.longitude))
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.yellow)
+                        } else {
+                             Text("N/A")
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.yellow)
+                        }
+                    } else if currentHuntType == .proximity {
+                        Text("Proximity Markers (\(proximityMarkers.count)):")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        // Optionally display info about the first proximity marker
+                        if let firstMarker = proximityMarkers.first {
+                            Text("Dist: \(String(format: "%.1f", firstMarker.dist))m, Dir: \(firstMarker.dir)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.yellow)
+                        } else {
+                             Text("N/A")
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.yellow)
+                        }
+                    } else {
+                        Text("No Hunt Data Loaded")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
                     
                     // Status message display
                     Text(statusMessage)
                         .font(.headline)
                         .foregroundColor(.yellow)
                         .padding(.top, 8)
-                    // Optionally display the first object's location or just the count
-                    if let firstLocation = objectLocations.first {
-                        Text(String(format: "%.6f", firstLocation.latitude))
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.yellow)
-                        Text(String(format: "%.6f", firstLocation.longitude))
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.yellow)
-                    } else {
-                         Text("N/A")
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.yellow)
-                    }
                 }
                 .padding()
                 .background(Color.black.opacity(0.6))
@@ -150,16 +217,16 @@ struct ContentView: View {
                 .padding()
             }
         }
-        .onChange(of: selectedObject) { newValue in
+        .onChange(of: selectedObject) { oldValue, newValue in
             // Clear locations when object type changes to none.
-            // Locations are now only set via launch argument/URL parsing.
+            // This might need adjustment based on how objectType is used with hunt types
             if newValue == .none {
-                 objectLocations = []
-                 print("ContentView onChange selectedObject: \(newValue.rawValue) - Object type set to None, clearing locations.")
+                 objectLocations = [] // Only clear geolocation locations here?
+                 // proximityMarkers = [] // Should proximity markers be cleared? Probably not by objectType change.
+                 print("ContentView onChange selectedObject: \(newValue.rawValue) - Object type set to None, clearing geolocation locations.")
             } else {
                 print("ContentView onChange selectedObject: \(newValue.rawValue)")
             }
-            // We no longer set a hardcoded location here.
         }
         .onReceive(locationManager.$currentLocation) { location in
             currentLocation = location
@@ -171,9 +238,6 @@ struct ContentView: View {
         .onAppear {
             print("ContentView onAppear: Requesting authorization and starting updates.")
             locationManager.requestAuthorization()
-            
-            // For simplicity, we'll focus on location functionality
-            // and remove the URL handling for now
             locationManager.startUpdating()
 
             // Check for launch arguments
@@ -182,74 +246,95 @@ struct ContentView: View {
                 let urlString = arguments[urlIndex + 1]
                 if let url = URL(string: urlString) {
                     print("ContentView onAppear: Received launch argument URL: \(url)")
-                    parsePinsFromURL(url)
+                    processLaunchURL(url) // Call the new processing function
                 } else {
                     print("ContentView onAppear: Failed to create URL from launch argument: \(urlString)")
                 }
             } else {
                 print("ContentView onAppear: No -appLaunchURL argument found.")
             }
-            print("ContentView onAppear: objectLocations.count = \(objectLocations.count), selectedObject = \(selectedObject.rawValue)")
+            print("ContentView onAppear: objectLocations.count = \(objectLocations.count), proximityMarkers.count = \(proximityMarkers.count), selectedObject = \(selectedObject.rawValue), currentHuntType = \(String(describing: currentHuntType))")
         }
         // .onOpenURL can be added back later if needed for real URL launches
         // .onOpenURL { url in
         //     print("Received URL via onOpenURL: \(url)")
-        //     parsePinsFromURL(url)
+        //     processLaunchURL(url) // Call the new processing function
         // }
     }
 
-    func parsePinsFromURL(_ url: URL) {
-        print("ContentView parsePinsFromURL: Attempting to parse URL: \(url)")
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true), // Use true for file URLs
+    // Renamed and updated URL parsing function
+    func processLaunchURL(_ url: URL) {
+        print("ContentView processLaunchURL: START - Attempting to parse URL: \(url)")
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
               let queryItems = components.queryItems else {
-            print("ContentView parsePinsFromURL: Could not create URLComponents or find query items.")
+            print("ContentView processLaunchURL: Could not create URLComponents or find query items.")
             return
         }
+        print("ContentView processLaunchURL: URLComponents and query items found.")
 
-        guard let pinsParam = queryItems.first(where: { $0.name == "pins" })?.value else {
-            print("ContentView parsePinsFromURL: No 'pins' parameter found in URL query.")
+        guard let huntTypeParam = queryItems.first(where: { $0.name == "hunt_type" })?.value,
+              let huntType = HuntType(rawValue: huntTypeParam) else {
+            print("ContentView processLaunchURL: No valid 'hunt_type' parameter found in URL query.")
             return
         }
-        print("ContentView parsePinsFromURL: Found pins parameter: \(pinsParam)")
+        print("ContentView processLaunchURL: Hunt type parameter found: \(huntTypeParam)")
+        
+        guard let dataParam = queryItems.first(where: { $0.name == "data" })?.value else {
+            print("ContentView processLaunchURL: No 'data' parameter found in URL query.")
+            return
+        }
+        print("ContentView processLaunchURL: Data parameter found (length: \(dataParam.count)).")
+        print("ContentView processLaunchURL: Found hunt_type: \(huntType.rawValue), data parameter: \(dataParam)")
 
-        guard let decodedData = Data(base64Encoded: pinsParam) else {
-            print("ContentView parsePinsFromURL: Failed to decode base64 string.")
+        print("ContentView processLaunchURL: Attempting to decode base64 string...")
+        guard let decodedData = Data(base64Encoded: dataParam) else {
+            print("ContentView processLaunchURL: Failed to decode base64 string.")
             return
         }
-        print("ContentView parsePinsFromURL: Successfully decoded base64 data.")
+        print("ContentView processLaunchURL: Successfully decoded base64 data (length: \(decodedData.count)).")
+
+        let decoder = JSONDecoder()
 
         do {
-            let decoder = JSONDecoder()
-            let pinLocations = try decoder.decode([PinLocation].self, from: decodedData)
-            print("ContentView parsePinsFromURL: Successfully decoded JSON: \(pinLocations.count) locations")
-            
-            // Convert decoded structs to CLLocationCoordinate2D and update state
-            self.objectLocations = pinLocations.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-            print("ContentView parsePinsFromURL: Updated objectLocations state with \(self.objectLocations.count) coordinates.")
-            
-            // Ensure an object type is selected if we received locations
-            if !self.objectLocations.isEmpty && self.selectedObject == .none {
-                self.selectedObject = .coin // Default to coin if none selected
-                print("ContentView parsePinsFromURL: Defaulted selectedObject to .coin")
+            print("ContentView processLaunchURL: Attempting to decode JSON for hunt type: \(huntType.rawValue)")
+            switch huntType {
+            case .geolocation:
+                let pinLocations = try decoder.decode([PinLocation].self, from: decodedData)
+                self.objectLocations = pinLocations.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+                self.proximityMarkers = [] // Clear proximity markers
+                print("ContentView processLaunchURL: Successfully decoded Geolocation JSON: \(pinLocations.count) locations")
+                print("ContentView processLaunchURL: Decoded Geolocation locations: \(self.objectLocations)")
+                
+                // Ensure an object type is selected if we received locations
+                if !self.objectLocations.isEmpty && self.selectedObject == .none {
+                    self.selectedObject = .coin // Default to coin if none selected
+                    print("ContentView processLaunchURL: Defaulted selectedObject to .coin for geolocation.")
+                }
+
+            case .proximity:
+                let markers = try decoder.decode([ProximityMarkerData].self, from: decodedData)
+                self.proximityMarkers = markers
+                self.objectLocations = [] // Clear geolocation locations
+                print("ContentView processLaunchURL: Successfully decoded Proximity JSON: \(markers.count) markers")
+                print("ContentView processLaunchURL: Decoded Proximity markers: \(self.proximityMarkers)")
+                
+                // For proximity, we'll use the Coin model as requested
+                self.selectedObject = .coin
+                print("ContentView processLaunchURL: Defaulted selectedObject to .coin for proximity.")
             }
             
+            self.currentHuntType = huntType // Set the hunt type after successful decoding
+            print("ContentView processLaunchURL: Set currentHuntType to \(huntType.rawValue)")
+            print("ContentView processLaunchURL: JSON decoding successful.")
+
         } catch {
-            print("ContentView parsePinsFromURL: Failed to decode JSON: \(error)")
-            // Attempt fallback for single coordinate format (lat,lng)
-            if let decodedString = String(data: decodedData, encoding: .utf8) {
-                 let coordinates = decodedString.components(separatedBy: ",")
-                 if coordinates.count == 2,
-                    let latitude = Double(coordinates[0]),
-                    let longitude = Double(coordinates[1]) {
-                     self.objectLocations = [CLLocationCoordinate2D(latitude: latitude, longitude: longitude)]
-                     print("ContentView parsePinsFromURL: Fallback: Parsed single coordinate: \(latitude), \(longitude)")
-                     if self.selectedObject == .none { self.selectedObject = .coin }
-                 } else {
-                     print("ContentView parsePinsFromURL: Fallback failed: Invalid single coordinate format.")
-                 }
-            } else {
-                 print("ContentView parsePinsFromURL: Fallback failed: Could not decode data as UTF8 string.")
-            }
+            print("ContentView processLaunchURL: Failed to decode JSON for \(huntType.rawValue): \(error)")
+            // Handle decoding errors - maybe clear data and reset hunt type?
+            self.objectLocations = []
+            self.proximityMarkers = []
+            self.currentHuntType = nil
+            self.selectedObject = .none
+            print("ContentView processLaunchURL: Cleared data and reset hunt type due to decoding error.")
         }
     }
 }
