@@ -11,8 +11,6 @@ extension CLLocationDirection {
     var degreesToRadians: Double { return self * .pi / 180 }
 }
 
-import ARKit
-
 struct ARViewContainer: UIViewRepresentable {
     @Binding var objectLocations: [CLLocationCoordinate2D] // Changed to array
     var referenceLocation: CLLocationCoordinate2D? // Changed back to var
@@ -57,14 +55,17 @@ struct ARViewContainer: UIViewRepresentable {
 
         // Configure AR session for world tracking
         let worldConfig = ARWorldTrackingConfiguration()
+        worldConfig.worldAlignment = .gravity // Explicitly set to ensure no ARKit heading alignment
         worldConfig.environmentTexturing = .automatic
         worldConfig.planeDetection = [.horizontal, .vertical] // Keep plane detection if needed
 
-        // Assign the coordinator as the session delegate *before* running
+        // Assign the coordinator as the session delegate
         arView.session.delegate = context.coordinator
         context.coordinator.arView = arView // Assign weak reference
 
-        arView.session.run(worldConfig, options: [])
+        // DO NOT run the session here. It will be run by the Coordinator when North alignment is achieved.
+        // arView.session.run(worldConfig, options: []) 
+        // worldConfig will be created and used in the Coordinator's startSessionAndPlaceObjects method.
 
         // Setup display link for animations
         let displayLink = CADisplayLink(target: context.coordinator, selector: #selector(Coordinator.updateRotation))
@@ -78,9 +79,9 @@ struct ARViewContainer: UIViewRepresentable {
         // Re-assigning them in makeUIView is generally redundant.
         // placeObjectsAction is set in makeCoordinator and captures the necessary bindings.
 
-        // Initial placement of objects will now be triggered by the heading observer in the coordinator
-        // Replaced updateObjectPlacement with a direct call to the coordinator's method
-        context.coordinator.placeObjectsInARView(arView: arView)
+        // Initial placement of objects will be triggered via attemptPlacementIfReady
+        // once heading is available and alignment is done.
+        // Removed direct call to placeObjectsInARView(arView: arView) from here.
 
         return arView
     }
@@ -107,10 +108,12 @@ if oldCoordHeading != newStructHeading {
         
         // beyond what @Binding provides, that would be handled here or via Combine publishers.
         // For now, the Coordinator's heading.didSet is the main trigger for initial placement.
-        // Force initial placement if heading is already available
-        if let heading = self.heading {
-            context.coordinator.heading = heading
-        }
+        // The assignment context.coordinator.heading = self.heading is already handled earlier
+        // if oldCoordHeading != newStructHeading.
+        // Removing redundant assignment:
+        // if let heading = self.heading {
+        //     context.coordinator.heading = heading
+        // }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -162,25 +165,59 @@ if oldCoordHeading != newStructHeading {
         // Properties for heading alignment
         var heading: CLHeading? { // Observe heading changes
             didSet {
-                print("Coordinator heading.didSet: New heading: \(String(describing: heading?.trueHeading)), Old heading: \(String(describing: oldValue?.trueHeading)), hasAlignedToNorth: \(hasAlignedToNorth)")
-                // Only attempt alignment once and if we have a valid heading and arView
-                if !hasAlignedToNorth, let trueHeading = heading?.trueHeading, let arView = arView {
-                    print("Coordinator heading.didSet: Conditions MET for alignment. Aligning and placing.")
-                    alignARWorldToNorth(arView: arView, heading: trueHeading)
-                    hasAlignedToNorth = true // Set flag after first alignment attempt
+                let newTrueHeading = heading?.trueHeading
+                let newAccuracy = heading?.headingAccuracy
+                let oldTrueHeading = oldValue?.trueHeading
+                let oldAccuracy = oldValue?.headingAccuracy
+
+                print("Coordinator heading.didSet: New heading: \(String(describing: newTrueHeading)) (acc: \(String(describing: newAccuracy))), Old: \(String(describing: oldTrueHeading)) (acc: \(String(describing: oldAccuracy))), hasAlignedToNorth: \(hasAlignedToNorth)")
+
+                // Only attempt to mark as "aligned" (user physically aligned to North) once,
+                // if we have a sufficiently accurate heading AND user is pointing North.
+                let NORTH_ALIGNMENT_TOLERANCE: CLLocationDirection = 10.0 // Degrees
+                let ACCURACY_THRESHOLD: CLLocationAccuracy = 20.0 // Degrees
+
+                if !hasAlignedToNorth,
+                   let th = newTrueHeading, th >= 0, // Valid heading number
+                   let acc = newAccuracy, acc > 0 && acc < ACCURACY_THRESHOLD, // Good accuracy
+                   (abs(th) < NORTH_ALIGNMENT_TOLERANCE || abs(th - 360.0) < NORTH_ALIGNMENT_TOLERANCE), // Pointing North
+                   let arView = arView {
                     
-                    // Now that we have heading and base anchor is potentially rotated, place objects
-                    // Alignment is done. Placement will be attempted via attemptPlacementIfReady,
-                    // which is also called from updateUIView.
-                    print("Coordinator heading.didSet: Alignment complete. hasAlignedToNorth is now true.")
-                    // No direct call to attemptPlacementIfReady here; let updateUIView handle it
-                    // to ensure referenceLocation has potentially updated too.
+                    print("Coordinator heading.didSet: User IS pointing North (Heading: \(th)°, Acc: \(acc)°). Conditions MET.")
+                    
+                    self.statusMessage = "North detected. Starting AR session..."
+                    print("Coordinator heading.didSet: Attempting to start AR session.")
+                    
+                    // Set hasAlignedToNorth to prevent this block from running again.
+                    hasAlignedToNorth = true 
+                    
+                    // Call method to start the session and then place objects.
+                    startSessionAndPlaceObjects()
+                    
                 } else {
-                    print("Coordinator heading.didSet: Conditions NOT MET for alignment. hasAlignedToNorth=\(hasAlignedToNorth), trueHeading=\(String(describing: heading?.trueHeading)), arView is nil=\(arView == nil)")
+                    // Update status message to guide user or explain why not proceeding
+                    if hasAlignedToNorth {
+                        // Already "aligned" and placed, no further status needed from here unless resetting
+                    } else if let th = newTrueHeading, th >= 0, let acc = newAccuracy, acc > 0 && acc < ACCURACY_THRESHOLD {
+                        self.statusMessage = String(format: "Point North (0° ±%.0f°). Current: %.1f°", NORTH_ALIGNMENT_TOLERANCE, th)
+                    } else if let acc = newAccuracy, acc >= ACCURACY_THRESHOLD {
+                        self.statusMessage = String(format: "Improve compass accuracy (current: %.1f°). Try figure-eight motion.", acc)
+                    } else {
+                        self.statusMessage = "Point North. Waiting for good heading..."
+                    }
+                    
+                    let reasonNotReady = """
+                    hasAlignedToNorth=\(hasAlignedToNorth), \
+                    newTrueHeading=\(String(describing: newTrueHeading)) (valid: \((newTrueHeading ?? -1) >= 0)), \
+                    newAccuracy=\(String(describing: newAccuracy)) (sufficient for check: \((newAccuracy ?? -1) > 0 && (newAccuracy ?? 999) < ACCURACY_THRESHOLD)), \
+                    pointingNorthCheck: \( (abs(newTrueHeading ?? 999) < NORTH_ALIGNMENT_TOLERANCE || abs((newTrueHeading ?? 999) - 360.0) < NORTH_ALIGNMENT_TOLERANCE) ), \
+                    arView is nil=\(arView == nil)
+                    """
+                    print("Coordinator heading.didSet: Conditions for North alignment NOT MET or already aligned. Details: \(reasonNotReady)")
                 }
             }
         }
-        private var hasAlignedToNorth = false // Track if we've aligned to north
+        private var hasAlignedToNorth = false // True when user is physically pointing North with good accuracy.
         private var hasPlacedObjects = false // New flag to ensure placement happens only once
 
         // Combine cancellables for observing changes
@@ -273,20 +310,25 @@ if oldCoordHeading != newStructHeading {
 
                 for location in self.objectLocations { // Iterate over wrapped value directly
                     print("Coordinator placeObjects: Processing location \(location)")
-                    let arPosition = convertToARWorldCoordinate(objectLocation: location, referenceLocation: refLoc)
-                    let anchor = AnchorEntity(world: arPosition)
+                    let arPositionInBaseFrame = convertToARWorldCoordinate(objectLocation: location, referenceLocation: refLoc)
+                    
+                    let objectAnchor = AnchorEntity() // Create a new anchor, positioned relative to its parent
+                    objectAnchor.position = arPositionInBaseFrame // Set its position within baseAnchor's coordinate system
+                    
                     guard let entity = createEntity(for: self.objectType) else { continue } // Access wrapped value directly
-                    anchor.addChild(entity)
+                    objectAnchor.addChild(entity) // Add visual model to this object's anchor
 
                     if let baseAnchor = self.baseAnchor {
-                        baseAnchor.addChild(anchor)
-                        print("Coordinator placeObjects: Added anchor to self.baseAnchor")
+                        baseAnchor.addChild(objectAnchor) // Add object's anchor to the main rotated baseAnchor
+                        print("Coordinator placeObjects: Added geolocation anchor to self.baseAnchor at local position \(arPositionInBaseFrame)")
                     } else {
-                        arView.scene.addAnchor(anchor)
-                        print("Coordinator placeObjects: WARNING - Added anchor directly to arView.scene (self.baseAnchor not found)")
+                        // This case should ideally not happen if alignment occurs first
+                        // If it does, objectAnchor.position will be interpreted as world coordinates
+                        arView.scene.addAnchor(objectAnchor) 
+                        print("Coordinator placeObjects: WARNING - Added geolocation anchor directly to arView.scene (self.baseAnchor not found). Position \(arPositionInBaseFrame) will be world coords.")
                     }
                     newEntities.append(entity)
-                    newAnchors.append(anchor)
+                    newAnchors.append(objectAnchor) // Store the objectAnchor
                 }
 
             case .proximity:
@@ -319,28 +361,32 @@ if oldCoordHeading != newStructHeading {
 
                     // Calculate the position relative to the base anchor (which is rotated to align Z with North)
                     // A marker at distance D and direction M degrees from North should be placed at:
-                    // x = D * sin(M_radians)
-                    // z = -D * cos(M_radians) // Negative Z because ARKit's Z is typically forward/south
+                    // x_local = D * sin(M_radians) (East component)
+                    // z_local = -D * cos(M_radians) (South component, as baseAnchor's +Z is South)
                     // Y is typically 0 for objects on the ground plane.
 
-                    let x = Float(marker.dist * sin(Double(markerAngleRadians)))
-                    let z = Float(-marker.dist * cos(Double(markerAngleRadians))) // Negative Z for forward
+                    let x_local = Float(marker.dist * sin(Double(markerAngleRadians)))
+                    let z_local = Float(-marker.dist * cos(Double(markerAngleRadians))) // Negative Z for South component
 
-                    let arPosition = SIMD3<Float>(x, 0, z) // Position relative to the base anchor (aligned to North)
+                    let arPositionInBaseFrame = SIMD3<Float>(x_local, 0, z_local) // Position relative to the base anchor
 
-                    let anchor = AnchorEntity(world: arPosition)
+                    let objectAnchor = AnchorEntity() // Create a new anchor, positioned relative to its parent
+                    objectAnchor.position = arPositionInBaseFrame // Set its position within baseAnchor's coordinate system
+                    
                     guard let entity = createEntity(for: objectTypeForProximity) else { continue }
-                    anchor.addChild(entity)
+                    objectAnchor.addChild(entity) // Add visual model to this object's anchor
 
                     if let baseAnchor = self.baseAnchor {
-                        baseAnchor.addChild(anchor)
-                        print("Coordinator placeObjects: Added proximity anchor to self.baseAnchor at position \(arPosition)")
+                        baseAnchor.addChild(objectAnchor)
+                        print("Coordinator placeObjects: Added proximity anchor to self.baseAnchor at local position \(arPositionInBaseFrame)")
                     } else {
-                        arView.scene.addAnchor(anchor)
-                        print("Coordinator placeObjects: WARNING - Added proximity anchor directly to arView.scene (self.baseAnchor not found) at position \(arPosition)")
+                        // This case should ideally not happen if alignment occurs first
+                        // If it does, objectAnchor.position will be interpreted as world coordinates
+                        arView.scene.addAnchor(objectAnchor)
+                        print("Coordinator placeObjects: WARNING - Added proximity anchor directly to arView.scene (self.baseAnchor not found). Position \(arPositionInBaseFrame) will be world coords.")
                     }
                     newEntities.append(entity)
-                    newAnchors.append(anchor)
+                    newAnchors.append(objectAnchor) // Store the objectAnchor
                 }
 
             case .none:
@@ -396,39 +442,67 @@ if oldCoordHeading != newStructHeading {
             return SIMD3<Float>(Float(deltaEast), 0, Float(-deltaNorth))
         }
         
-        // Method to align the AR world to true north
-        private func alignARWorldToNorth(arView: ARView, heading: CLLocationDirection) {
-            print("Coordinator alignARWorldToNorth: Called with heading \(heading).")
-            // Create or get the base anchor if it doesn't exist
+        // Method to ensure baseAnchor exists at world origin with identity rotation.
+        private func ensureBaseAnchorExists(in arView: ARView) {
+            print("Coordinator ensureBaseAnchorExists: Ensuring baseAnchor exists at identity.")
             if baseAnchor == nil {
-                baseAnchor = AnchorEntity(world: [0,0,0]) // Create anchor at world origin
-                arView.scene.addAnchor(baseAnchor!) // Add it to the scene
-                print("Coordinator alignARWorldToNorth: Created and added base anchor to scene.")
+                baseAnchor = AnchorEntity(world: .zero) // Create anchor at world origin, identity rotation
+                arView.scene.addAnchor(baseAnchor!)
+                print("Coordinator ensureBaseAnchorExists: Created baseAnchor at world origin (identity rotation).")
+            } else {
+                if baseAnchor?.scene == nil { // If it was removed (e.g. by session reset not used anymore)
+                    arView.scene.addAnchor(baseAnchor!)
+                }
+                baseAnchor!.transform = .identity // Ensure identity transform
+                print("Coordinator ensureBaseAnchorExists: Ensured existing baseAnchor is in scene and at identity.")
             }
-            
-            guard let baseAnchor = baseAnchor else {
-                print("Coordinator alignARWorldToNorth: ERROR - baseAnchor is nil after attempting to create it.")
+        }
+        
+        // New method to start the AR session for the first time and then place objects
+        func startSessionAndPlaceObjects() {
+            guard let arView = self.arView else {
+                print("startSessionAndPlaceObjects: ARView is nil. Cannot proceed.")
+                self.hasAlignedToNorth = false // Allow another attempt
                 return
             }
-
-            // Calculate the rotation needed to align the AR world's positive Z-axis with true north (0 degrees)
-            // A heading of X means the device is pointing X degrees east of north.
-            // We need to rotate the AR world by -X degrees around the Y-axis to make north (0 degrees) align with the Z-axis.
-            let rotationAngle = -Float(Coordinator.degreesToRadians(heading)) // Use Coordinator's method
-            let rotation = simd_quatf(angle: rotationAngle, axis: [0, 1, 0]) // Rotate around Y-axis
-
-            // Apply the rotation to the base anchor
-            baseAnchor.transform.rotation = rotation
-            print("Base anchor rotated to align AR world to true north with rotation: \(rotationAngle) radians")
             
-            // Update status message
-            DispatchQueue.main.async {
-                self.statusMessage = "Aligned to North" // Access wrapped value directly
-                // Reset status message after 2 seconds
-                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                     self.statusMessage = "" // Access wrapped value directly
-                 }
+            // Always configure and run. If session is already running, run with new config will update it.
+            // Using .gravityAndHeading to let ARKit attempt to align to North.
+            print("startSessionAndPlaceObjects: Configuring and running AR Session with .gravityAndHeading.")
+            let worldConfig = ARWorldTrackingConfiguration()
+            worldConfig.worldAlignment = .gravityAndHeading // ARKit attempts to align -Z to North.
+            worldConfig.planeDetection = [.horizontal, .vertical]
+            worldConfig.environmentTexturing = .automatic
+            
+            // Run the session. If it's the first time, it starts. If already running, it reconfigures.
+            // Using .resetTracking and .removeExistingAnchors to ensure a fresh start with the new alignment.
+            arView.session.run(worldConfig, options: [.resetTracking, .removeExistingAnchors])
+            print("startSessionAndPlaceObjects: AR Session run/reconfigured with .gravityAndHeading.")
+            
+            // After session starts/reconfigures, ensure baseAnchor and place objects
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { // Short delay for session to stabilize
+                print("startSessionAndPlaceObjects: Ensuring baseAnchor and attempting placement.")
+                self.ensureBaseAnchorExists(in: arView)
+                
+                self.hasPlacedObjects = false // Ensure we can place objects
+                
+                self.statusMessage = "AR Session started. Placing objects..."
+                self.attemptPlacementIfReady()
             }
+        }
+
+        // alignARWorldToNorth is no longer used for rotation. Its role is to ensure baseAnchor exists.
+        // It's called from heading.didSet before startSessionAndPlaceObjects.
+        // However, ensureBaseAnchorExists is now called *after* session start.
+        // So, this function can be simplified or its call removed from heading.didSet.
+        // For now, let's make it just call ensureBaseAnchorExists if arView is present.
+        private func alignARWorldToNorth(arView: ARView, heading: CLLocationDirection) {
+            print("alignARWorldToNorth: Called (now primarily ensures base anchor after session start via other paths).")
+            // The actual ensureBaseAnchorExists call is now in startSessionAndPlaceObjects.
+            // This function is called from heading.didSet before startSessionAndPlaceObjects,
+            // so baseAnchor might be created here, then re-checked/re-added in startSessionAndPlaceObjects.
+            // This is slightly redundant but safe.
+            ensureBaseAnchorExists(in: arView)
         }
 
         @objc func updateRotation(displayLink: CADisplayLink) {
@@ -507,13 +581,18 @@ if oldCoordHeading != newStructHeading {
             }
         }
         
-        // Method to clear anchors by removing children from the base anchor
+        // Method to clear all previously placed anchors
         func clearAnchors() {
-            guard let baseAnchor = baseAnchor else { return }
-            baseAnchor.children.removeAll() // Remove all children from the base anchor
-            anchors.removeAll()
-            coinEntities.removeAll()
-            print("Cleared all anchors from base anchor.")
+            print("Coordinator clearAnchors: Clearing \(anchors.count) previously placed anchors.")
+            for anchor in self.anchors {
+                anchor.removeFromParent() // Removes anchor from its parent (either baseAnchor or arView.scene)
+            }
+            self.anchors.removeAll()
+            self.coinEntities.removeAll() // Assuming coinEntities are children of these anchors
+
+            // If baseAnchor exists, its children (which were in self.anchors) should now be gone.
+            // For sanity, one could also do baseAnchor?.children.removeAll(), but it might be redundant.
+            print("Coordinator clearAnchors: All tracked anchors removed from scene and internal lists.")
         }
 
         // MARK: - ARSessionDelegate Methods
@@ -556,6 +635,8 @@ if oldCoordHeading != newStructHeading {
         // Assuming format "Cardinal Degrees Cardinal" e.g., "N32E", "S45W", "E90S", "W0N" (pure West)
         // Angle is clockwise from North (positive Z in AR world after alignment)
         private func parseDirectionStringToRadians(dir: String) -> Float? {
+            print("--- PARSER CALLED WITH: \(dir) ---") // Diagnostic print
+
             let pattern = #"^([NESW])(\d*)?([NESW])?$"#
             guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
                   let match = regex.firstMatch(in: dir, options: [], range: NSRange(location: 0, length: dir.utf16.count)) else {

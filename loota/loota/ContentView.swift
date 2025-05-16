@@ -111,6 +111,28 @@ struct ContentView: View {
                  let _ = print("ContentView: ARViewContainer WILL NOT be created. currentHuntType: \(String(describing: currentHuntType)), objectLocations.isEmpty: \(objectLocations.isEmpty), proximityMarkers.isEmpty: \(proximityMarkers.isEmpty)")
             }
 
+            // VStack for Heading and Accuracy Display (Top Center)
+            VStack {
+                Text(locationManager.trueHeadingString)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(8)
+                Text(locationManager.accuracyString)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(8)
+                Spacer() // Pushes this VStack to the top
+            }
+            .padding(.top, 10) // Add some padding from the top edge
+            .frame(maxWidth: .infinity, alignment: .center) // Center horizontally
+
+
             // UI Overlay VStack
             VStack {
                 HStack(alignment: .top) { // Top Row: Counter and Object Type Display
