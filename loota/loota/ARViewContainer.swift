@@ -175,7 +175,7 @@ if oldCoordHeading != newStructHeading {
                 // Only attempt to mark as "aligned" (user physically aligned to North) once,
                 // if we have a sufficiently accurate heading AND user is pointing North.
                 let NORTH_ALIGNMENT_TOLERANCE: CLLocationDirection = 10.0 // Degrees
-                let ACCURACY_THRESHOLD: CLLocationAccuracy = 20.0 // Degrees
+                let ACCURACY_THRESHOLD: CLLocationAccuracy = 30.0 // Degrees (Temporarily relaxed from 20.0 for testing)
 
                 if !hasAlignedToNorth,
                    let th = newTrueHeading, th >= 0, // Valid heading number
@@ -308,15 +308,20 @@ if oldCoordHeading != newStructHeading {
 
                 print("Coordinator placeObjects: Placing \(self.objectLocations.count) objects of type \(self.objectType.rawValue)") // Access wrapped values directly
 
-                for location in self.objectLocations { // Iterate over wrapped value directly
-                    print("Coordinator placeObjects: Processing location \(location)")
+                for (index, location) in self.objectLocations.enumerated() { // Iterate with index
+                    print("Coordinator placeObjects: Processing location \(index + 1): \(location)")
                     let arPositionInBaseFrame = convertToARWorldCoordinate(objectLocation: location, referenceLocation: refLoc)
                     
-                    let objectAnchor = AnchorEntity() // Create a new anchor, positioned relative to its parent
-                    objectAnchor.position = arPositionInBaseFrame // Set its position within baseAnchor's coordinate system
+                    let objectAnchor = AnchorEntity() 
+                    objectAnchor.position = arPositionInBaseFrame 
                     
-                    guard let entity = createEntity(for: self.objectType) else { continue } // Access wrapped value directly
-                    objectAnchor.addChild(entity) // Add visual model to this object's anchor
+                    guard let entity = createEntity(for: self.objectType) else { continue } 
+                    objectAnchor.addChild(entity)
+
+                    // Add glowing number label
+                    let labelEntity = createLabelEntity(text: "\(index + 1)")
+                    labelEntity.position = [0, 0.15, 0] // Position above the main entity
+                    objectAnchor.addChild(labelEntity)
 
                     if let baseAnchor = self.baseAnchor {
                         baseAnchor.addChild(objectAnchor) // Add object's anchor to the main rotated baseAnchor
@@ -346,8 +351,8 @@ if oldCoordHeading != newStructHeading {
 
                 print("Coordinator placeObjects: Placing \(self.proximityMarkers.count) objects for proximity hunt (type: \(objectTypeForProximity.rawValue))") // Access wrapped value directly
 
-                for marker in self.proximityMarkers { // Iterate over wrapped value directly
-                    print("Coordinator placeObjects: Processing proximity marker: Dist=\(marker.dist), Dir=\(marker.dir)")
+                for (index, marker) in self.proximityMarkers.enumerated() { // Iterate with index
+                    print("Coordinator placeObjects: Processing proximity marker \(index + 1): Dist=\(marker.dist), Dir=\(marker.dir)")
 
                     guard let headingRadians = self.heading?.trueHeading.degreesToRadians else {
                          print("Coordinator placeObjects: Skipping proximity marker placement - Heading not available.")
@@ -374,7 +379,12 @@ if oldCoordHeading != newStructHeading {
                     objectAnchor.position = arPositionInBaseFrame // Set its position within baseAnchor's coordinate system
                     
                     guard let entity = createEntity(for: objectTypeForProximity) else { continue }
-                    objectAnchor.addChild(entity) // Add visual model to this object's anchor
+                    objectAnchor.addChild(entity)
+
+                    // Add glowing number label
+                    let labelEntity = createLabelEntity(text: "\(index + 1)")
+                    labelEntity.position = [0, 0.15, 0] // Position above the main entity
+                    objectAnchor.addChild(labelEntity)
 
                     if let baseAnchor = self.baseAnchor {
                         baseAnchor.addChild(objectAnchor)
@@ -439,7 +449,30 @@ if oldCoordHeading != newStructHeading {
             let lon2 = objectCLLocation.coordinate.longitude
             let deltaNorth = (lat2 - lat1) * metersPerDegree
             let deltaEast = (lon2 - lon1) * metersPerDegree * cos(Coordinator.degreesToRadians(lat1))
-            return SIMD3<Float>(Float(deltaEast), 0, Float(-deltaNorth))
+            print("convertToARWorldCoordinate: Returning (E, -N): (\(deltaEast), \(-deltaNorth))")
+            return SIMD3<Float>(Float(deltaEast), 0, Float(-deltaNorth)) // Reverted to original
+        }
+
+        // Helper to create a glowing, billboarded text label
+        private func createLabelEntity(text: String) -> ModelEntity {
+            let textMesh = MeshResource.generateText(
+                text,
+                extrusionDepth: 0.01,
+                font: .systemFont(ofSize: 0.3), // Increased size from 0.1
+                containerFrame: .zero, // No container frame
+                alignment: .center,
+                lineBreakMode: .byWordWrapping
+            )
+            
+            // Use UnlitMaterial for a simple, glowing effect
+            let material = UnlitMaterial(color: UIColor.yellow) // Changed to yellow for a "glowing" look
+
+            let labelEntity = ModelEntity(mesh: textMesh, materials: [material])
+            
+            // Add BillboardComponent to make the text always face the camera
+            labelEntity.components.set(BillboardComponent())
+            
+            return labelEntity
         }
         
         // Method to ensure baseAnchor exists at world origin with identity rotation.
