@@ -3,14 +3,33 @@ import CoreLocation
 class LocationManager: NSObject, ObservableObject {
     @Published var currentLocation: CLLocationCoordinate2D?
     @Published var heading: CLHeading? {
-            didSet {
-                print("🧭 Heading updated: \(heading?.trueHeading ?? -1)")
+        didSet {
+            print("🧭 Heading updated: \(heading?.trueHeading ?? -1), Accuracy: \(heading?.headingAccuracy ?? -1)")
+            // Update formatted strings when heading changes
+            if let h = heading {
+                if h.trueHeading >= 0 {
+                    self.trueHeadingString = String(format: "Heading: %.2f°", h.trueHeading)
+                } else {
+                    self.trueHeadingString = "Heading: Invalid"
+                }
+                if h.headingAccuracy >= 0 {
+                    self.accuracyString = String(format: "Accuracy: %.2f°", h.headingAccuracy)
+                } else {
+                    self.accuracyString = "Accuracy: Invalid"
+                }
+            } else {
+                self.trueHeadingString = "Heading: N/A"
+                self.accuracyString = "Accuracy: N/A"
             }
         }
-        private let locationManager = CLLocationManager()
-        private let meterPerDegree: Double = 111320.0 // Meters per degree at equator
-        
-        override init() {
+    }
+    @Published var trueHeadingString: String = "Heading: N/A"
+    @Published var accuracyString: String = "Accuracy: N/A"
+    
+    private let locationManager = CLLocationManager()
+    private let meterPerDegree: Double = 111320.0 // Meters per degree at equator
+    
+    override init() {
             super.init()
             locationManager.delegate = self
             locationManager.desiredAccuracy = kCLLocationAccuracyBest
