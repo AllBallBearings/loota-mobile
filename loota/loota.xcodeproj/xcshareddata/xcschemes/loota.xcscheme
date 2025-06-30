@@ -80,7 +80,7 @@
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "file:///Users/jaredgoolsby/Documents/Github/loota/ar-view.html?hunt_type=geolocation&amp;data=W3sibGF0IjozNS42NzIxNTEsImxuZyI6LTc4Ljc1MTgwM30seyJsYXQiOjM1LjY3MjEyNiwibG5nIjotNzguNzUxNzk5fSx7ImxhdCI6MzUuNjcyMTAyLCJsbmciOi03OC43NTE3OTV9LHsibGF0IjozNS42NzIwODYsImxuZyI6LTc4Ljc1MTc5MX0seyJsYXQiOjM1LjY3MjA2NSwibG5nIjotNzguNzUxNzg4fSx7ImxhdCI6MzUuNjcyMDUxLCJsbmciOi03OC43NTE3ODV9XQ=="
+            argument = "file:///Users/jaredgoolsby/Documents/Github/loota/ar-view.html?hunt_type=proximity&amp;data=W3siZGlzdCI6Ny4yLCJkaXIiOiJXNzBOIn0seyJkaXN0Ijo1LjYsImRpciI6Ilc0Nk4ifSx7ImRpc3QiOjYuMywiZGlyIjoiTjgyRSJ9XQ=="
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
