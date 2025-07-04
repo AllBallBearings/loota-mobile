@@ -18,7 +18,7 @@ public struct ARViewContainer: UIViewRepresentable {
   public var referenceLocation: CLLocationCoordinate2D?
   @Binding public var statusMessage: String
   @Binding public var heading: CLHeading?
-  public var onCoinCollected: (() -> Void)?
+  public var onCoinCollected: ((CLLocationCoordinate2D) -> Void)?
   @Binding public var objectType: ARObjectType
   @Binding public var currentHuntType: HuntType?
   @Binding public var proximityMarkers: [ProximityMarkerData]
@@ -28,7 +28,7 @@ public struct ARViewContainer: UIViewRepresentable {
     referenceLocation: CLLocationCoordinate2D?,
     statusMessage: Binding<String>,
     heading: Binding<CLHeading?>,
-    onCoinCollected: (() -> Void)? = nil,
+    onCoinCollected: ((CLLocationCoordinate2D) -> Void)? = nil,
     objectType: Binding<ARObjectType>,
     currentHuntType: Binding<HuntType?>,
     proximityMarkers: Binding<[ProximityMarkerData]>
@@ -161,7 +161,7 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var proximityMarkers: [ProximityMarkerData]  // Added binding
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
 
-    public var onCoinCollected: (() -> Void)?
+    public var onCoinCollected: ((CLLocationCoordinate2D) -> Void)?
     public var coinEntities: [ModelEntity] = []
     public var anchors: [AnchorEntity] = []
     public var revolutionDuration: TimeInterval = 1.5
@@ -656,15 +656,18 @@ public struct ARViewContainer: UIViewRepresentable {
           print("Object collected at distance: \(distance)")
           playCoinSound()
 
+          let collectedLocation = objectLocations[index]
+
           // Remove anchor from the base anchor
           anchor.removeFromParent()
 
           // Remove from coordinator arrays
           anchors.remove(at: index)
           coinEntities.remove(at: index)
+          objectLocations.remove(at: index)
 
           // Trigger callback
-          onCoinCollected?()
+          onCoinCollected?(collectedLocation)
         }
       }
     }

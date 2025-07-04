@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:www.loota.fun</string>
+		<string>applinks:*.loota.fun</string>
 	</array>
 </dict>
 </plist>

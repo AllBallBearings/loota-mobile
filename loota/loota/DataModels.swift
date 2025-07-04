@@ -73,7 +73,39 @@ public struct HuntData: Codable {
   public let winnerId: String?  // Added missing field
   public let createdAt: String?  // Added missing field
   public let updatedAt: String?  // Added missing field
-  public let pins: [PinData]
+  public var pins: [PinData]
+}
+
+// MARK: - User and Hunt Interaction Models
+
+public struct UserRegistrationRequest: Codable {
+  let name: String
+  let phone: String?
+  let paypalId: String?
+  let deviceId: String
+}
+
+public struct UserRegistrationResponse: Codable {
+  let message: String
+  let userId: String
+}
+
+public struct JoinHuntRequest: Codable {
+  let userId: String
+}
+
+public struct JoinHuntResponse: Codable {
+  let message: String
+  let participationId: String
+}
+
+public struct CollectPinRequest: Codable {
+  let collectedByUserId: String
+}
+
+public struct CollectPinResponse: Codable {
+  let message: String
+  let pinId: String
 }
 
 // MARK: - AR and View-Related Data Models

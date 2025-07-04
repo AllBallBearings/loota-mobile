@@ -35,7 +35,7 @@ public struct ContentView: View {
           referenceLocation: $locationManager.currentLocation.wrappedValue,
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
-          onCoinCollected: {
+          onCoinCollected: { collectedLocation in
             coinsCollected += 1
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
               animate = true
@@ -43,6 +43,12 @@ public struct ContentView: View {
             // Reset animation after short delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
               animate = false
+            }
+
+            if let huntId = huntDataManager.huntData?.id,
+              let pin = findPin(at: collectedLocation)
+            {
+              huntDataManager.collectPin(huntId: huntId, pinId: pin.id!)
             }
           },
           objectType: $selectedObject,
@@ -193,9 +199,9 @@ public struct ContentView: View {
           }
 
           // Status message display
-          Text(statusMessage)
+          Text(huntDataManager.errorMessage ?? statusMessage)
             .font(.headline)
-            .foregroundColor(.yellow)
+            .foregroundColor(.red)
             .padding(.top, 8)
 
           // On-screen debug indicators
@@ -266,6 +272,7 @@ public struct ContentView: View {
     print(
       "ContentView loadHuntData: Received hunt data for ID: \(huntData.id), type: \(huntData.type.rawValue)"
     )
+    huntDataManager.joinHunt(huntId: huntData.id)
     self.currentHuntType = huntData.type
     self.statusMessage = ""  // Clear any previous error messages
 
@@ -290,6 +297,13 @@ public struct ContentView: View {
       self.objectLocations = []
       self.selectedObject = .coin  // Default to coin for proximity
       print("ContentView loadHuntData: Proximity markers loaded: \(self.proximityMarkers.count)")
+    }
+  }
+
+  private func findPin(at location: CLLocationCoordinate2D) -> PinData? {
+    huntDataManager.huntData?.pins.first { pin in
+      guard let lat = pin.lat, let lng = pin.lng else { return false }
+      return abs(lat - location.latitude) < 0.0001 && abs(lng - location.longitude) < 0.0001
     }
   }
 

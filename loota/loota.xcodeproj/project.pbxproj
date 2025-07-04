@@ -446,6 +446,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Loota;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.adventure-games";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera to provide augmented reality experiences.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to place virtual objects in the real world.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = arkit;
@@ -486,6 +487,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Loota;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.adventure-games";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera to provide augmented reality experiences.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to place virtual objects in the real world.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = arkit;
