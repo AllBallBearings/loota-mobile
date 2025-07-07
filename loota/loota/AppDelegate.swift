@@ -64,18 +64,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let huntId = pathComponents[2]
     print("DEBUG: AppDelegate - Extracted hunt ID: \(huntId)")
 
-    APIService.shared.fetchHunt(withId: huntId) { result in
-      DispatchQueue.main.async {
-        switch result {
-        case .success(let huntData):
-          print("DEBUG: AppDelegate - Successfully fetched hunt data for ID: \(huntData.id)")
-          HuntDataManager.shared.huntData = huntData
-        case .failure(let error):
-          print("DEBUG: AppDelegate - Failed to fetch hunt data: \(error.localizedDescription)")
-        // Optionally, you could set an error state in the HuntDataManager
-        }
-      }
-    }
+    // Use HuntDataManager to fetch hunt data (this handles user registration too)
+    HuntDataManager.shared.fetchHunt(withId: huntId)
   }
 
   func applicationWillResignActive(_ application: UIApplication) {
