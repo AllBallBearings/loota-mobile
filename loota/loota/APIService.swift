@@ -209,6 +209,18 @@ public class APIService {
         return
       }
 
+      // Handle 409 status code specially for rejoining hunts
+      if httpResponse.statusCode == 409 {
+        if let data = data, let responseString = String(data: data, encoding: .utf8), responseString.contains("User is already participating in this hunt") {
+            // If the user is already in the hunt, treat it as a success/rejoin scenario.
+            // Create a synthetic response since the error response body is not a JoinHuntResponse.
+            print("DEBUG: APIService - Handled 409 as a successful rejoin.")
+            let syntheticResponse = JoinHuntResponse(message: "User is already participating in this hunt.", participationId: "", isRejoining: true)
+            completion(.success(syntheticResponse))
+            return
+        }
+      }
+      
       guard (200...299).contains(httpResponse.statusCode) else {
         let message = data.flatMap { String(data: $0, encoding: .utf8) }
         completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
