@@ -17,6 +17,8 @@ public struct ContentView: View {
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
+  @State private var showingNamePrompt = false
+  @State private var userName = ""
 
   public init() {
     print("DEBUG: ContentView - init() called.")
@@ -35,7 +37,7 @@ public struct ContentView: View {
           referenceLocation: $locationManager.currentLocation.wrappedValue,
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
-          onCoinCollected: {
+          onCoinCollected: { collectedLocation in
             coinsCollected += 1
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
               animate = true
@@ -43,6 +45,12 @@ public struct ContentView: View {
             // Reset animation after short delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
               animate = false
+            }
+
+            if let huntId = huntDataManager.huntData?.id,
+              let pin = findPin(at: collectedLocation)
+            {
+              huntDataManager.collectPin(huntId: huntId, pinId: pin.id!)
             }
           },
           objectType: $selectedObject,
@@ -192,11 +200,19 @@ public struct ContentView: View {
               .foregroundColor(.white)
           }
 
-          // Status message display
-          Text(statusMessage)
+          // Status message display (errors)
+          Text(huntDataManager.errorMessage ?? statusMessage)
             .font(.headline)
-            .foregroundColor(.yellow)
+            .foregroundColor(.red)
             .padding(.top, 8)
+
+          // Join status message display (success messages)
+          if let joinMessage = huntDataManager.joinStatusMessage {
+            Text(joinMessage)
+              .font(.headline)
+              .foregroundColor(.green)
+              .padding(.top, 4)
+          }
 
           // On-screen debug indicators
           if currentHuntType != nil {
@@ -253,7 +269,19 @@ public struct ContentView: View {
       print(
         "ContentView onAppear: objectLocations.count = \(objectLocations.count), proximityMarkers.count = \(proximityMarkers.count), selectedObject = \(selectedObject.rawValue), currentHuntType = \(String(describing: currentHuntType))"
       )
+      if huntDataManager.isUserNameMissing {
+        showingNamePrompt = true
+      }
     }
+    .alert("Enter Your Name", isPresented: $showingNamePrompt, actions: {
+      TextField("Name", text: $userName)
+      Button("OK") {
+        huntDataManager.setUserName(userName)
+        showingNamePrompt = false
+      }
+    }, message: {
+      Text("Please enter your name to participate in the hunt.")
+    })
     .onReceive(huntDataManager.$huntData) { huntData in
       if let huntData = huntData {
         loadHuntData(huntData)
@@ -266,6 +294,7 @@ public struct ContentView: View {
     print(
       "ContentView loadHuntData: Received hunt data for ID: \(huntData.id), type: \(huntData.type.rawValue)"
     )
+    // huntDataManager.joinHunt(huntId: huntData.id) // This is now called from HuntDataManager
     self.currentHuntType = huntData.type
     self.statusMessage = ""  // Clear any previous error messages
 
@@ -290,6 +319,13 @@ public struct ContentView: View {
       self.objectLocations = []
       self.selectedObject = .coin  // Default to coin for proximity
       print("ContentView loadHuntData: Proximity markers loaded: \(self.proximityMarkers.count)")
+    }
+  }
+
+  private func findPin(at location: CLLocationCoordinate2D) -> PinData? {
+    huntDataManager.huntData?.pins.first { pin in
+      guard let lat = pin.lat, let lng = pin.lng else { return false }
+      return abs(lat - location.latitude) < 0.0001 && abs(lng - location.longitude) < 0.0001
     }
   }
 

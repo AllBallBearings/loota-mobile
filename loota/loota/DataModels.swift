@@ -11,30 +11,36 @@ public enum HuntType: String, Codable {
 }
 
 public struct PinData: Codable {
-  public let id: String?  // Added missing field
-  public let huntId: String?  // Added missing field
+  public let id: String?
+  public let huntId: String?
   public let lat: Double?
   public let lng: Double?
   public let distanceFt: Double?
   public let directionStr: String?
   public let x: Double?
   public let y: Double?
-  public let createdAt: String?  // Added missing field
+  public let createdAt: String?
+  public let collectedByUserId: String?
+  public let collectedAt: String?
 
-  // Custom initializer to handle String to Double conversion for lat and lng
+  // Custom initializer to handle flexible lat/lng decoding (String or Double)
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decodeIfPresent(String.self, forKey: .id)
     huntId = try container.decodeIfPresent(String.self, forKey: .huntId)
 
-    // Decode lat and lng as String, then convert to Double
-    if let latString = try container.decodeIfPresent(String.self, forKey: .lat) {
+    // Decode lat and lng - try Double first, then String as fallback
+    if let latDouble = try container.decodeIfPresent(Double.self, forKey: .lat) {
+      lat = latDouble
+    } else if let latString = try container.decodeIfPresent(String.self, forKey: .lat) {
       lat = Double(latString)
     } else {
       lat = nil
     }
 
-    if let lngString = try container.decodeIfPresent(String.self, forKey: .lng) {
+    if let lngDouble = try container.decodeIfPresent(Double.self, forKey: .lng) {
+      lng = lngDouble
+    } else if let lngString = try container.decodeIfPresent(String.self, forKey: .lng) {
       lng = Double(lngString)
     } else {
       lng = nil
@@ -45,6 +51,8 @@ public struct PinData: Codable {
     x = try container.decodeIfPresent(Double.self, forKey: .x)
     y = try container.decodeIfPresent(Double.self, forKey: .y)
     createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+    collectedByUserId = try container.decodeIfPresent(String.self, forKey: .collectedByUserId)
+    collectedAt = try container.decodeIfPresent(String.self, forKey: .collectedAt)
   }
 
   // Manual encoding if needed, or rely on default if only decoding is custom
@@ -52,28 +60,64 @@ public struct PinData: Codable {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encodeIfPresent(id, forKey: .id)
     try container.encodeIfPresent(huntId, forKey: .huntId)
-    try container.encodeIfPresent(lat?.description, forKey: .lat)  // Encode as String
-    try container.encodeIfPresent(lng?.description, forKey: .lng)  // Encode as String
+    try container.encodeIfPresent(lat, forKey: .lat)  // Encode as Double
+    try container.encodeIfPresent(lng, forKey: .lng)  // Encode as Double
     try container.encodeIfPresent(distanceFt, forKey: .distanceFt)
     try container.encodeIfPresent(directionStr, forKey: .directionStr)
     try container.encodeIfPresent(x, forKey: .x)
     try container.encodeIfPresent(y, forKey: .y)
     try container.encodeIfPresent(createdAt, forKey: .createdAt)
+    try container.encodeIfPresent(collectedByUserId, forKey: .collectedByUserId)
+    try container.encodeIfPresent(collectedAt, forKey: .collectedAt)
   }
 
   // Define CodingKeys for all properties
   private enum CodingKeys: String, CodingKey {
-    case id, huntId, lat, lng, distanceFt, directionStr, x, y, createdAt
+    case id, huntId, lat, lng, distanceFt, directionStr, x, y, createdAt, collectedByUserId, collectedAt
   }
 }
 
 public struct HuntData: Codable {
   public let id: String
   public let type: HuntType
-  public let winnerId: String?  // Added missing field
-  public let createdAt: String?  // Added missing field
-  public let updatedAt: String?  // Added missing field
-  public let pins: [PinData]
+  public let winnerId: String?
+  public let createdAt: String?
+  public let updatedAt: String?
+  public let creatorId: String?
+  public var pins: [PinData]
+}
+
+// MARK: - User and Hunt Interaction Models
+
+public struct UserRegistrationRequest: Codable {
+  let name: String
+  let phone: String?
+  let paypalId: String?
+  let deviceId: String
+}
+
+public struct UserRegistrationResponse: Codable {
+  let message: String
+  let userId: String
+}
+
+public struct JoinHuntRequest: Codable {
+  let userId: String
+}
+
+public struct JoinHuntResponse: Codable {
+  let message: String
+  let participationId: String
+  let isRejoining: Bool
+}
+
+public struct CollectPinRequest: Codable {
+  let collectedByUserId: String
+}
+
+public struct CollectPinResponse: Codable {
+  let message: String
+  let pinId: String
 }
 
 // MARK: - AR and View-Related Data Models
