@@ -159,6 +159,11 @@ public struct ContentView: View {
             .font(.caption.monospacedDigit())
             .foregroundColor(.white)
 
+          // Display User Name
+          Text("User Name: \(huntDataManager.userName ?? "N/A")")
+            .font(.caption)
+            .foregroundColor(.white)
+
           Divider()
             .background(Color.white)
             .padding(.vertical, 4)
@@ -269,7 +274,7 @@ public struct ContentView: View {
       print(
         "ContentView onAppear: objectLocations.count = \(objectLocations.count), proximityMarkers.count = \(proximityMarkers.count), selectedObject = \(selectedObject.rawValue), currentHuntType = \(String(describing: currentHuntType))"
       )
-      if huntDataManager.isUserNameMissing {
+      if huntDataManager.shouldPromptForName {
         showingNamePrompt = true
       }
     }
@@ -278,12 +283,23 @@ public struct ContentView: View {
       Button("OK") {
         huntDataManager.setUserName(userName)
         showingNamePrompt = false
+        // Join hunt after setting name
+        if let huntData = huntDataManager.huntData {
+          huntDataManager.joinHunt(huntId: huntData.id)
+        }
       }
     }, message: {
       Text("Please enter your name to participate in the hunt.")
     })
     .onReceive(huntDataManager.$huntData) { huntData in
       if let huntData = huntData {
+        // Check if user name prompt is needed when hunt data is received
+        if huntDataManager.shouldPromptForName {
+          showingNamePrompt = true
+        } else {
+          // User already has a name, proceed with joining hunt
+          huntDataManager.joinHunt(huntId: huntData.id)
+        }
         loadHuntData(huntData)
       }
     }
