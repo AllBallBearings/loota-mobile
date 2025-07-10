@@ -300,4 +300,140 @@ public class APIService {
       }
     }.resume()
   }
+
+  public func getUser(
+    userId: String,
+    completion: @escaping (Result<UserResponse, APIError>) -> Void
+  ) {
+    let urlString = "\(baseURL)/api/users/\(userId)"
+    guard let url = URL(string: urlString) else {
+      completion(.failure(.invalidURL))
+      return
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
+
+    print("DEBUG: APIService - Get User Request Headers: \(request.allHTTPHeaderFields ?? [:])")
+    print("DEBUG: APIService - Get User URL: \(url.absoluteString)")
+
+    session.dataTask(with: request) { data, response, error in
+      if let error = error {
+        print(
+          "DEBUG: APIService - Network error for \(request.url?.absoluteString ?? "N/A"): \(error.localizedDescription). Full error: \(error)"
+        )
+        completion(.failure(.networkError(error)))
+        return
+      }
+
+      guard let httpResponse = response as? HTTPURLResponse else {
+        completion(.failure(.unknownError))
+        return
+      }
+
+      guard (200...299).contains(httpResponse.statusCode) else {
+        let message = data.flatMap { String(data: $0, encoding: .utf8) }
+        print(
+          "DEBUG: APIService - Get User server error: Status Code \(httpResponse.statusCode), Message: \(message ?? "N/A")"
+        )
+        completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
+        return
+      }
+
+      guard let data = data else {
+        completion(.failure(.unknownError))
+        return
+      }
+
+      print("DEBUG: APIService - Get User raw response: \(String(data: data, encoding: .utf8) ?? "N/A")")
+
+      do {
+        let userResponse = try JSONDecoder().decode(UserResponse.self, from: data)
+        print("DEBUG: APIService - Get User success: \(userResponse)")
+        completion(.success(userResponse))
+      } catch {
+        print("DEBUG: APIService - Get User decoding error: \(error)")
+        completion(.failure(.decodingError(error)))
+      }
+    }.resume()
+  }
+
+  public func updateUserName(
+    userId: String, newName: String,
+    completion: @escaping (Result<UserResponse, APIError>) -> Void
+  ) {
+    print("DEBUG: APIService - updateUserName called with userId: '\(userId)', newName: '\(newName)'")
+    
+    let urlString = "\(baseURL)/api/users/\(userId)"
+    guard let url = URL(string: urlString) else {
+      print("DEBUG: APIService - updateUserName: Invalid URL: \(urlString)")
+      completion(.failure(.invalidURL))
+      return
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "PUT"
+    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
+
+    let body: [String: String] = ["name": newName]
+    do {
+      request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+      print("DEBUG: APIService - updateUserName: Request body: \(body)")
+    } catch {
+      print("DEBUG: APIService - updateUserName: Failed to serialize body: \(error)")
+      completion(.failure(.decodingError(error)))
+      return
+    }
+
+    print("DEBUG: APIService - Update User Name Request Headers: \(request.allHTTPHeaderFields ?? [:])")
+    print("DEBUG: APIService - Update User Name URL: \(url.absoluteString)")
+
+    session.dataTask(with: request) { data, response, error in
+      if let error = error {
+        print(
+          "DEBUG: APIService - Network error for \(request.url?.absoluteString ?? "N/A"): \(error.localizedDescription). Full error: \(error)"
+        )
+        completion(.failure(.networkError(error)))
+        return
+      }
+
+      guard let httpResponse = response as? HTTPURLResponse else {
+        completion(.failure(.unknownError))
+        return
+      }
+
+      guard (200...299).contains(httpResponse.statusCode) else {
+        let message = data.flatMap { String(data: $0, encoding: .utf8) }
+        print(
+          "DEBUG: APIService - Server error: Status Code \(httpResponse.statusCode), Message: \(message ?? "N/A")"
+        )
+        completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
+        return
+      }
+
+      guard let data = data else {
+        print("DEBUG: APIService - updateUserName: No data received from server.")
+        completion(.failure(.unknownError))
+        return
+      }
+
+      print("DEBUG: APIService - updateUserName: Received response with status \(httpResponse.statusCode)")
+      print("DEBUG: APIService - updateUserName: Raw response: \(String(data: data, encoding: .utf8) ?? "N/A")")
+
+      do {
+        let userResponse = try JSONDecoder().decode(UserResponse.self, from: data)
+        print("DEBUG: APIService - updateUserName: Successfully decoded user response: \(userResponse)")
+        print("DEBUG: APIService - updateUserName: Updated user name to: '\(userResponse.name)'")
+        completion(.success(userResponse))
+      } catch {
+        print(
+          "DEBUG: APIService - Decoding error for UserResponse: \(error.localizedDescription), Data: \(String(data: data, encoding: .utf8) ?? "N/A")"
+        )
+        completion(.failure(.decodingError(error)))
+      }
+    }.resume()
+  }
 }

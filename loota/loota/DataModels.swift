@@ -101,6 +101,16 @@ public struct UserRegistrationResponse: Codable {
   let userId: String
 }
 
+public struct UserResponse: Codable {
+  public let userId: String
+  public let name: String
+  
+  private enum CodingKeys: String, CodingKey {
+    case userId = "id"
+    case name
+  }
+}
+
 public struct JoinHuntRequest: Codable {
   let userId: String
 }
