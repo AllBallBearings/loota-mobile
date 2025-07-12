@@ -18,20 +18,22 @@ public struct ARViewContainer: UIViewRepresentable {
   public var referenceLocation: CLLocationCoordinate2D?
   @Binding public var statusMessage: String
   @Binding public var heading: CLHeading?
-  public var onCoinCollected: ((CLLocationCoordinate2D) -> Void)?
+  public var onCoinCollected: ((String) -> Void)?
   @Binding public var objectType: ARObjectType
   @Binding public var currentHuntType: HuntType?
   @Binding public var proximityMarkers: [ProximityMarkerData]
+  @Binding public var pinData: [PinData]
 
   public init(
     objectLocations: Binding<[CLLocationCoordinate2D]>,
     referenceLocation: CLLocationCoordinate2D?,
     statusMessage: Binding<String>,
     heading: Binding<CLHeading?>,
-    onCoinCollected: ((CLLocationCoordinate2D) -> Void)? = nil,
+    onCoinCollected: ((String) -> Void)? = nil,
     objectType: Binding<ARObjectType>,
     currentHuntType: Binding<HuntType?>,
-    proximityMarkers: Binding<[ProximityMarkerData]>
+    proximityMarkers: Binding<[ProximityMarkerData]>,
+    pinData: Binding<[PinData]>
   ) {
     print(
       "ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation)), heading=\(String(describing: heading.wrappedValue?.trueHeading)), huntType=\(String(describing: currentHuntType.wrappedValue)), proximityMarkers.count=\(proximityMarkers.wrappedValue.count))"
@@ -44,6 +46,7 @@ public struct ARViewContainer: UIViewRepresentable {
     self._objectType = objectType
     self._currentHuntType = currentHuntType
     self._proximityMarkers = proximityMarkers
+    self._pinData = pinData
   }
 
   // MARK: - UIViewRepresentable Methods
@@ -138,7 +141,8 @@ public struct ARViewContainer: UIViewRepresentable {
       objectType: $objectType,
       statusMessage: $statusMessage,
       currentHuntType: $currentHuntType,  // Pass binding
-      proximityMarkers: $proximityMarkers  // Pass binding
+      proximityMarkers: $proximityMarkers,  // Pass binding
+      pinData: $pinData
     )
     // Set the placeObjectsAction on the newly created coordinator instance
     // The coordinator&#x27;s placeObjectsAction will call its own placeObjectsInARView method.
@@ -159,11 +163,13 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var statusMessage: String
     @Binding public var currentHuntType: HuntType?  // Added binding
     @Binding public var proximityMarkers: [ProximityMarkerData]  // Added binding
+    @Binding public var pinData: [PinData]
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
 
-    public var onCoinCollected: ((CLLocationCoordinate2D) -> Void)?
+    public var onCoinCollected: ((String) -> Void)?
     public var coinEntities: [ModelEntity] = []
     public var anchors: [AnchorEntity] = []
+    public var entityToPinId: [ModelEntity: String] = [:]  // Map entities to their pin IDs
     public var revolutionDuration: TimeInterval = 1.5
     public var accumulatedAngle: Float = 0
     public var lastTimestamp: CFTimeInterval?
@@ -258,7 +264,8 @@ public struct ARViewContainer: UIViewRepresentable {
       objectType: Binding<ARObjectType>,
       statusMessage: Binding<String>,
       currentHuntType: Binding<HuntType?>,  // Added parameter
-      proximityMarkers: Binding<[ProximityMarkerData]>
+      proximityMarkers: Binding<[ProximityMarkerData]>,
+      pinData: Binding<[PinData]>
     ) {  // Added parameter
       print("Coordinator init: Setting up.")
       self.referenceLocation = initialReferenceLocation  // Assign initial value
@@ -267,6 +274,7 @@ public struct ARViewContainer: UIViewRepresentable {
       self._statusMessage = statusMessage
       self._currentHuntType = currentHuntType  // Assign binding
       self._proximityMarkers = proximityMarkers  // Assign binding
+      self._pinData = pinData
 
       // Removed problematic referenceLocationObserver
 
@@ -359,10 +367,27 @@ public struct ARViewContainer: UIViewRepresentable {
           guard let entity = createEntity(for: self.objectType) else { continue }
           objectAnchor.addChild(entity)
 
-          // Add glowing number label
-          let labelEntity = createLabelEntity(text: "\(index + 1)")
-          labelEntity.position = [0, 0.15, 0]  // Position above the main entity
-          objectAnchor.addChild(labelEntity)
+          // Get pin data for this index
+          let pin = index < self.pinData.count ? self.pinData[index] : nil
+          let markerNumber = (pin?.order ?? index) + 1
+          let pinId = pin?.id ?? "unknown"
+          let shortId = pinId.prefix(8)
+          
+          // Store the mapping between entity and pin ID
+          self.entityToPinId[entity] = pinId
+          self.coinEntities.append(entity)
+          
+          // Add marker number label
+          let numberLabel = createLabelEntity(text: "\(markerNumber)")
+          numberLabel.position = [0, 0.25, 0]  // Higher position for number
+          objectAnchor.addChild(numberLabel)
+          
+          // Add ID label
+          let idLabel = createLabelEntity(text: String(shortId))
+          idLabel.position = [0, 0.1, 0]  // Lower position for ID
+          objectAnchor.addChild(idLabel)
+          
+          print("Coordinator placeObjects: Added labels - Marker: \(markerNumber), ID: \(shortId), Entity mapped to pinId: \(pinId)")
 
           if let baseAnchor = self.baseAnchor {
             baseAnchor.addChild(objectAnchor)  // Add object's anchor to the main rotated baseAnchor
@@ -436,10 +461,27 @@ public struct ARViewContainer: UIViewRepresentable {
           guard let entity = createEntity(for: objectTypeForProximity) else { continue }
           objectAnchor.addChild(entity)
 
-          // Add glowing number label
-          let labelEntity = createLabelEntity(text: "\(index + 1)")
-          labelEntity.position = [0, 0.15, 0]  // Position above the main entity
-          objectAnchor.addChild(labelEntity)
+          // Get pin data for this index
+          let pin = index < self.pinData.count ? self.pinData[index] : nil
+          let markerNumber = (pin?.order ?? index) + 1
+          let pinId = pin?.id ?? "unknown"
+          let shortId = pinId.prefix(8)
+          
+          // Store the mapping between entity and pin ID
+          self.entityToPinId[entity] = pinId
+          self.coinEntities.append(entity)
+          
+          // Add marker number label
+          let numberLabel = createLabelEntity(text: "\(markerNumber)")
+          numberLabel.position = [0, 0.25, 0]  // Higher position for number
+          objectAnchor.addChild(numberLabel)
+          
+          // Add ID label
+          let idLabel = createLabelEntity(text: String(shortId))
+          idLabel.position = [0, 0.1, 0]  // Lower position for ID
+          objectAnchor.addChild(idLabel)
+          
+          print("Coordinator placeObjects: Added proximity labels - Marker: \(markerNumber), ID: \(shortId), Entity mapped to pinId: \(pinId)")
 
           if let baseAnchor = self.baseAnchor {
             baseAnchor.addChild(objectAnchor)
@@ -656,18 +698,21 @@ public struct ARViewContainer: UIViewRepresentable {
           print("Object collected at distance: \(distance)")
           playCoinSound()
 
-          let collectedLocation = objectLocations[index]
+          // Get the pin ID for this specific entity
+          let pinId = entityToPinId[entity] ?? "unknown"
+          print("Collecting entity with pinId: \(pinId)")
 
           // Remove anchor from the base anchor
           anchor.removeFromParent()
 
-          // Remove from coordinator arrays
+          // Remove from coordinator arrays and mapping
           anchors.remove(at: index)
-          coinEntities.remove(at: index)
+          let removedEntity = coinEntities.remove(at: index)
           objectLocations.remove(at: index)
+          entityToPinId.removeValue(forKey: removedEntity)
 
-          // Trigger callback
-          onCoinCollected?(collectedLocation)
+          // Trigger callback with the specific pin ID
+          onCoinCollected?(pinId)
         }
       }
     }
