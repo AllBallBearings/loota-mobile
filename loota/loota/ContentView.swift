@@ -12,6 +12,7 @@ public struct ContentView: View {
   @State private var currentLocation: CLLocationCoordinate2D?
   @State private var objectLocations: [CLLocationCoordinate2D] = []
   @State private var proximityMarkers: [ProximityMarkerData] = []
+  @State private var pinData: [PinData] = []
   @State private var statusMessage: String = ""
   @State private var currentHuntType: HuntType?
 
@@ -37,7 +38,7 @@ public struct ContentView: View {
           referenceLocation: $locationManager.currentLocation.wrappedValue,
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
-          onCoinCollected: { collectedLocation in
+          onCoinCollected: { collectedPinId in
             coinsCollected += 1
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
               animate = true
@@ -47,15 +48,14 @@ public struct ContentView: View {
               animate = false
             }
 
-            if let huntId = huntDataManager.huntData?.id,
-              let pin = findPin(at: collectedLocation)
-            {
-              huntDataManager.collectPin(huntId: huntId, pinId: pin.id!)
+            if let huntId = huntDataManager.huntData?.id {
+              huntDataManager.collectPin(huntId: huntId, pinId: collectedPinId)
             }
           },
           objectType: $selectedObject,
           currentHuntType: $currentHuntType,
-          proximityMarkers: $proximityMarkers
+          proximityMarkers: $proximityMarkers,
+          pinData: $pinData
         )
         // Use a combined ID that changes when hunt type or relevant data changes
         .id(
@@ -316,34 +316,53 @@ public struct ContentView: View {
 
     switch huntData.type {
     case .geolocation:
-      self.objectLocations = huntData.pins.compactMap { pin in
-        guard let lat = pin.lat, let lng = pin.lng else { return nil }
-        return CLLocationCoordinate2D(latitude: lat, longitude: lng)
+      print("ContentView loadHuntData: Processing \(huntData.pins.count) pins for geolocation")
+      self.objectLocations = []
+      self.pinData = []
+      
+      for pin in huntData.pins {
+        if let lat = pin.lat, let lng = pin.lng {
+          let location = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+          self.objectLocations.append(location)
+          self.pinData.append(pin)
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: AR Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Order: \(pin.order ?? -1) - Lat: \(lat), Lng: \(lng)")
+        } else {
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: Skipping Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Missing coordinates")
+        }
       }
+      
       self.proximityMarkers = []
       if !self.objectLocations.isEmpty && self.selectedObject == .none {
         self.selectedObject = .coin
       }
-      print("ContentView loadHuntData: Geolocation locations loaded: \(self.objectLocations.count)")
+      print("ContentView loadHuntData: Total AR objects created: \(self.objectLocations.count)")
 
     case .proximity:
-      self.proximityMarkers = huntData.pins.compactMap { pin in
-        guard let dist = pin.distanceFt, let dir = pin.directionStr else { return nil }
-        // Convert feet to meters for consistency if needed, assuming dist is in feet from API
-        return ProximityMarkerData(dist: dist * 0.3048, dir: dir)
+      print("ContentView loadHuntData: Processing \(huntData.pins.count) pins for proximity")
+      self.proximityMarkers = []
+      self.pinData = []
+      
+      for pin in huntData.pins {
+        if let dist = pin.distanceFt, let dir = pin.directionStr {
+          let marker = ProximityMarkerData(dist: dist * 0.3048, dir: dir)
+          self.proximityMarkers.append(marker)
+          self.pinData.append(pin)
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: AR Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Order: \(pin.order ?? -1) - \(dist)ft \(dir)")
+        } else {
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: Skipping Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Missing proximity data")
+        }
       }
+      
       self.objectLocations = []
       self.selectedObject = .coin  // Default to coin for proximity
-      print("ContentView loadHuntData: Proximity markers loaded: \(self.proximityMarkers.count)")
+      print("ContentView loadHuntData: Total proximity markers created: \(self.proximityMarkers.count)")
     }
   }
 
-  private func findPin(at location: CLLocationCoordinate2D) -> PinData? {
-    huntDataManager.huntData?.pins.first { pin in
-      guard let lat = pin.lat, let lng = pin.lng else { return false }
-      return abs(lat - location.latitude) < 0.0001 && abs(lng - location.longitude) < 0.0001
-    }
-  }
 
   // Method to display error messages from AppDelegate
   public func displayErrorMessage(_ message: String) {

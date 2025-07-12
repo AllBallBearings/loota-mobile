@@ -19,6 +19,7 @@ public struct PinData: Codable {
   public let directionStr: String?
   public let x: Double?
   public let y: Double?
+  public let order: Int?
   public let createdAt: String?
   public let collectedByUserId: String?
   public let collectedAt: String?
@@ -50,6 +51,7 @@ public struct PinData: Codable {
     directionStr = try container.decodeIfPresent(String.self, forKey: .directionStr)
     x = try container.decodeIfPresent(Double.self, forKey: .x)
     y = try container.decodeIfPresent(Double.self, forKey: .y)
+    order = try container.decodeIfPresent(Int.self, forKey: .order)
     createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     collectedByUserId = try container.decodeIfPresent(String.self, forKey: .collectedByUserId)
     collectedAt = try container.decodeIfPresent(String.self, forKey: .collectedAt)
@@ -66,6 +68,7 @@ public struct PinData: Codable {
     try container.encodeIfPresent(directionStr, forKey: .directionStr)
     try container.encodeIfPresent(x, forKey: .x)
     try container.encodeIfPresent(y, forKey: .y)
+    try container.encodeIfPresent(order, forKey: .order)
     try container.encodeIfPresent(createdAt, forKey: .createdAt)
     try container.encodeIfPresent(collectedByUserId, forKey: .collectedByUserId)
     try container.encodeIfPresent(collectedAt, forKey: .collectedAt)
@@ -73,7 +76,7 @@ public struct PinData: Codable {
 
   // Define CodingKeys for all properties
   private enum CodingKeys: String, CodingKey {
-    case id, huntId, lat, lng, distanceFt, directionStr, x, y, createdAt, collectedByUserId, collectedAt
+    case id, huntId, lat, lng, distanceFt, directionStr, x, y, order, createdAt, collectedByUserId, collectedAt
   }
 }
 

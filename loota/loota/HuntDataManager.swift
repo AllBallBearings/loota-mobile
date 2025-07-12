@@ -174,7 +174,25 @@ public class HuntDataManager: ObservableObject {
       DispatchQueue.main.async {
         switch result {
         case .success(var data):
+          print("DEBUG: HuntDataManager - fetchHunt: Received hunt data with \(data.pins.count) pins")
+          
+          // Sort pins by order field to ensure consistent numbering
+          data.pins.sort { pin1, pin2 in
+            let order1 = pin1.order ?? Int.max
+            let order2 = pin2.order ?? Int.max
+            return order1 < order2
+          }
+          print("DEBUG: HuntDataManager - fetchHunt: Pins sorted by order field")
+          
+          // Log all pin data with order-based numbering for debugging
+          for pin in data.pins {
+            let displayNumber = (pin.order ?? -1) + 1
+            print("DEBUG: HuntDataManager - Marker \(displayNumber): ID: \(pin.id ?? "nil"), Order: \(pin.order ?? -1), Lat: \(pin.lat ?? 0), Lng: \(pin.lng ?? 0)")
+          }
+          
           data.pins.removeAll { self.collectedPinIDs.contains($0.id ?? "") }
+          print("DEBUG: HuntDataManager - fetchHunt: After filtering collected pins, \(data.pins.count) pins remain")
+          
           self.huntData = data
           // Don't auto-join hunt here - let ContentView handle user registration flow
         case .failure(let error):
@@ -207,9 +225,15 @@ public class HuntDataManager: ObservableObject {
     print("DEBUG: HuntDataManager - proceedWithJoinHunt called")
     registerUserIfNeeded { [weak self] success in
       guard let self = self else { return }
-      guard success, let userId = self.userId, !self.hasJoinedHunt else {
-        print("DEBUG: HuntDataManager - joinHunt: Failed to register or already joined. success: \(success), userId: \(self.userId ?? "nil"), hasJoinedHunt: \(self.hasJoinedHunt)")
-        self.errorMessage = self.hasJoinedHunt ? "Already joined this hunt." : "User not registered."
+      guard success, let userId = self.userId else {
+        print("DEBUG: HuntDataManager - joinHunt: Failed to register. success: \(success), userId: \(self.userId ?? "nil")")
+        self.errorMessage = "User not registered."
+        return
+      }
+      
+      // Check if already joined and skip if so
+      if self.hasJoinedHunt {
+        print("DEBUG: HuntDataManager - joinHunt: Already joined this hunt, skipping")
         return
       }
 
@@ -244,23 +268,34 @@ public class HuntDataManager: ObservableObject {
   }
 
   public func collectPin(huntId: String, pinId: String) {
+    print("DEBUG: HuntDataManager - collectPin called for huntId: \(huntId), pinId: \(pinId)")
+    print("DEBUG: HuntDataManager - collectPin: hasJoinedHunt: \(hasJoinedHunt)")
+    
     registerUserIfNeeded { [weak self] success in
       guard let self = self else { return }
+      print("DEBUG: HuntDataManager - collectPin: registerUserIfNeeded success: \(success)")
+      print("DEBUG: HuntDataManager - collectPin: userId: \(self.userId ?? "nil")")
+      
       guard success, let userId = self.userId else {
+        print("DEBUG: HuntDataManager - collectPin: Failed - User not registered")
         self.errorMessage = "User not registered."
         return
       }
 
+      print("DEBUG: HuntDataManager - collectPin: Attempting to collect pinId: \(pinId)")
+      
       APIService.shared.collectPin(huntId: huntId, pinId: pinId, userId: userId) { result in
         DispatchQueue.main.async {
           switch result {
           case .success(let response):
             // Handle successful collection, e.g., remove pin from map
-            print("Successfully collected pin: \(response.pinId)")
+            print("DEBUG: HuntDataManager - collectPin: Successfully collected pin: \(response.pinId)")
+            print("DEBUG: HuntDataManager - collectPin: Original pinId sent: \(pinId), Response pinId: \(response.pinId)")
             self.collectedPinIDs.insert(response.pinId)
             self.saveCollectedPinIDs()
             self.removePin(pinId: response.pinId)
           case .failure(let error):
+            print("DEBUG: HuntDataManager - collectPin: Failed to collect pin \(pinId): \(error.localizedDescription)")
             self.errorMessage = error.localizedDescription
           }
         }
