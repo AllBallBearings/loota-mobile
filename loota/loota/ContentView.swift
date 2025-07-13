@@ -17,7 +17,6 @@ public struct ContentView: View {
   @State private var currentHuntType: HuntType?
   @State private var handTrackingStatus: String = "Hand tracking ready"
   @State private var isDebugMode: Bool = false
-  @State private var showHandGestureOverlay: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -112,6 +111,21 @@ public struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
       }
 
+      // Summoning hint message (bottom center)
+      VStack {
+        Spacer()
+        
+        Text("🧙‍♂️ If loot is just out of reach, then summon it with an outstretched hand")
+          .font(.caption)
+          .foregroundColor(.white)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .background(Color.black.opacity(0.7))
+          .cornerRadius(12)
+          .padding(.bottom, 120) // Above the debug panel
+      }
+      .frame(maxWidth: .infinity)
+      
       // UI Overlay VStack
       VStack {
         HStack(alignment: .top) {  // Top Row: Counter and Object Type Display
@@ -144,13 +158,6 @@ public struct ContentView: View {
           VStack(alignment: .trailing) {
             // Top row with debug toggle and gesture help
             HStack(spacing: 8) {
-              // Hand gesture help button
-              Button(action: {
-                showHandGestureOverlay = true
-              }) {
-                Text("🧙‍♂️")
-                  .font(.title2)
-              }
               
               // Debug toggle button
               Button(action: {
@@ -253,7 +260,6 @@ public struct ContentView: View {
             .foregroundColor(handTrackingStatus.contains("🚀") ? .green : .yellow)
             .multilineTextAlignment(.center)
             
-          // Hand overlay toggles removed - simplified summoning no longer needs them
 
           // Status message display (errors)
           Text(huntDataManager.errorMessage ?? statusMessage)
@@ -297,12 +303,6 @@ public struct ContentView: View {
         }
       }
       
-      // Hand Gesture Overlay
-      if showHandGestureOverlay {
-        HandGestureOverlay(onDismiss: {
-          showHandGestureOverlay = false
-        })
-      }
     }
     .onChange(of: selectedObject) { oldValue, newValue in
       // Clear locations when object type changes to none.
@@ -360,12 +360,6 @@ public struct ContentView: View {
         }
         loadHuntData(huntData)
         
-        // Show gesture overlay when hunt loads (unless in debug mode)
-        if !isDebugMode && (huntData.pins.count > 0) {
-          DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            showHandGestureOverlay = true
-          }
-        }
       }
     }
   }
@@ -442,111 +436,3 @@ public struct ContentView: View {
   }
 }
 
-// MARK: - Hand Gesture Overlay
-
-struct HandGestureOverlay: View {
-  let onDismiss: () -> Void
-  
-  var body: some View {
-    ZStack {
-      // Semi-transparent background
-      Color.black.opacity(0.8)
-        .edgesIgnoringSafeArea(.all)
-        .onTapGesture {
-          onDismiss()
-        }
-      
-      VStack(spacing: 20) {
-        // Title
-        Text("🧙‍♂️ Spell Casting Gesture")
-          .font(.title2)
-          .fontWeight(.bold)
-          .foregroundColor(.white)
-          .multilineTextAlignment(.center)
-        
-        // Hand illustration using text/emoji
-        VStack(spacing: 15) {
-          Text("✋")
-            .font(.system(size: 80))
-            .rotationEffect(.degrees(-15)) // Slight angle like casting toward object
-          
-          Text("👆 Palm facing TOWARD the object")
-            .font(.headline)
-            .foregroundColor(.yellow)
-            .multilineTextAlignment(.center)
-          
-          Text("🖐️ Fingers extended (like casting a spell)")
-            .font(.subheadline)
-            .foregroundColor(.white)
-            .multilineTextAlignment(.center)
-          
-          Text("📏 Stay within 10 feet of the object")
-            .font(.subheadline)
-            .foregroundColor(.cyan)
-            .multilineTextAlignment(.center)
-        }
-        .padding(.vertical, 20)
-        
-        // Instructions
-        VStack(spacing: 12) {
-          Text("How to Cast:")
-            .font(.headline)
-            .foregroundColor(.white)
-          
-          HStack(alignment: .top, spacing: 10) {
-            Text("1.")
-              .font(.subheadline)
-              .foregroundColor(.yellow)
-            Text("Extend your arm toward the object")
-              .font(.subheadline)
-              .foregroundColor(.white)
-          }
-          
-          HStack(alignment: .top, spacing: 10) {
-            Text("2.")
-              .font(.subheadline)
-              .foregroundColor(.yellow)
-            Text("Turn your palm to face the object (away from camera)")
-              .font(.subheadline)
-              .foregroundColor(.white)
-          }
-          
-          HStack(alignment: .top, spacing: 10) {
-            Text("3.")
-              .font(.subheadline)
-              .foregroundColor(.yellow)
-            Text("Keep fingers extended like a wizard or Jedi")
-              .font(.subheadline)
-              .foregroundColor(.white)
-          }
-          
-          HStack(alignment: .top, spacing: 10) {
-            Text("4.")
-              .font(.subheadline)
-              .foregroundColor(.yellow)
-            Text("Hold steady until object floats toward you")
-              .font(.subheadline)
-              .foregroundColor(.white)
-          }
-        }
-        .padding(.horizontal, 20)
-        
-        // Dismiss button
-        Button(action: onDismiss) {
-          Text("Got it! ⚡")
-            .font(.headline)
-            .foregroundColor(.black)
-            .padding(.horizontal, 30)
-            .padding(.vertical, 12)
-            .background(Color.yellow)
-            .cornerRadius(25)
-        }
-        .padding(.top, 20)
-      }
-      .padding(30)
-      .background(Color.gray.opacity(0.1))
-      .cornerRadius(20)
-      .padding(.horizontal, 20)
-    }
-  }
-}

@@ -26,8 +26,6 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var pinData: [PinData]
   @Binding public var handTrackingStatus: String
   @Binding public var isDebugMode: Bool
-  @Binding public var showHandOverlay: Bool
-  @Binding public var showTargetPose: Bool
 
   public init(
     objectLocations: Binding<[CLLocationCoordinate2D]>,
@@ -40,9 +38,7 @@ public struct ARViewContainer: UIViewRepresentable {
     proximityMarkers: Binding<[ProximityMarkerData]>,
     pinData: Binding<[PinData]>,
     handTrackingStatus: Binding<String>,
-    isDebugMode: Binding<Bool>,
-    showHandOverlay: Binding<Bool>,
-    showTargetPose: Binding<Bool>
+    isDebugMode: Binding<Bool>
   ) {
     print(
       "ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation)), heading=\(String(describing: heading.wrappedValue?.trueHeading)), huntType=\(String(describing: currentHuntType.wrappedValue)), proximityMarkers.count=\(proximityMarkers.wrappedValue.count))"
@@ -58,8 +54,6 @@ public struct ARViewContainer: UIViewRepresentable {
     self._pinData = pinData
     self._handTrackingStatus = handTrackingStatus
     self._isDebugMode = isDebugMode
-    self._showHandOverlay = showHandOverlay
-    self._showTargetPose = showTargetPose
   }
 
   // MARK: - UIViewRepresentable Methods
@@ -217,7 +211,7 @@ public struct ARViewContainer: UIViewRepresentable {
     public var summoningEntity: ModelEntity?
     public var originalEntityPosition: SIMD3<Float>?
     public var summonStartTime: CFTimeInterval?
-    public let summonDuration: TimeInterval = 3.0  // Increased to 3 seconds for slower approach
+    public let summonDuration: TimeInterval = 10.0  // Increased to 10 seconds for much slower approach
     public let proximityThreshold: Float = 3.048  // 10 feet in meters
     public var collectedEntities: Set<ModelEntity> = []  // Track collected entities
     public var frameCounter: Int = 0
@@ -319,7 +313,7 @@ public struct ARViewContainer: UIViewRepresentable {
       pinData: Binding<[PinData]>,
       handTrackingStatus: Binding<String>,
       isDebugMode: Binding<Bool>
-    ) {  // Removed hand overlay parameters
+    ) {
       print("Coordinator init: Setting up.")
       self.referenceLocation = initialReferenceLocation  // Assign initial value
       self._objectLocations = objectLocations
@@ -1001,88 +995,43 @@ public struct ARViewContainer: UIViewRepresentable {
     }
 
     private func animateObjectTowardsUser(_ entity: ModelEntity, cameraPosition: SIMD3<Float>) {
-      // Calculate direction from entity to camera
+      // Calculate direction from entity to camera and initial distance
       let entityPosition = entity.position(relativeTo: nil)
       let direction = normalize(cameraPosition - entityPosition)
       let totalDistance = simd_distance(entityPosition, cameraPosition)
 
-      // Create a slow-to-fast animation over exactly 3 seconds total
-      let stage1Duration: TimeInterval = 2.0  // Slow start - first 2 seconds
-      let stage2Duration: TimeInterval = 1.0  // Fast finish - final 1 second
+      // Create a very slow-to-fast animation that brings object close to user over 10 seconds
+      let stage1Duration: TimeInterval = 8.0  // Very slow start - first 8 seconds
+      let stage2Duration: TimeInterval = 2.0  // Fast finish - final 2 seconds
       
-      // Stage 1: Move 20% of the way very slowly with gentle upward arc
-      let stage1Distance = totalDistance * 0.2
+      // Stage 1: Move slowly toward user (50% of distance) with gentle upward arc
+      let stage1Distance = totalDistance * 0.5
       let stage1Position = entityPosition + direction * stage1Distance
       var stage1Transform = Transform(translation: stage1Position)
-      stage1Transform.translation.y += 0.15  // Higher upward arc for magical effect
+      stage1Transform.translation.y += 0.2  // Gentle upward arc for magical effect
       
-      // Start very slow animation with easeOut for gradual acceleration
+      // Start very slow animation with easeOut
       entity.move(to: stage1Transform, relativeTo: nil, duration: stage1Duration, timingFunction: .easeOut)
       
-      // Stage 2: Move remaining 70% quickly to collection point
+      // Stage 2: Move much closer to user for collection detection
       DispatchQueue.main.asyncAfter(deadline: .now() + stage1Duration) { [weak self] in
         guard let self = self, entity == self.summoningEntity else { return }
         
-        let finalDistance = totalDistance * 0.9  // 90% total for collection
-        let finalPosition = entityPosition + direction * finalDistance
+        // Move to within collection range (0.5 meters from camera for clear collection)
+        let collectionDistance = totalDistance - 0.5  // Leave 0.5m for collection detection
+        let finalPosition = entityPosition + direction * collectionDistance
         let finalTransform = Transform(translation: finalPosition)
         
-        // Fast final approach with easeIn for strong acceleration toward user
+        // Fast final approach that brings object close enough for collection
         entity.move(to: finalTransform, relativeTo: nil, duration: stage2Duration, timingFunction: .easeIn)
       }
 
       // Add gentle floating animation throughout
       addFloatingAnimation(to: entity, duration: summonDuration)
-
-      // Schedule automatic collection when animation completes (3 seconds + small buffer)
-      DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
-        self?.collectSummonedObject(entity)
-      }
+      
+      // Note: No auto-collection - let the normal proximity detection handle it
     }
 
-    private func collectSummonedObject(_ entity: ModelEntity) {
-      guard entity == summoningEntity,
-        let anchor = findAnchorForEntity(entity),
-        let index = coinEntities.firstIndex(of: entity)
-      else {
-        print("Cannot collect summoned object - not found or not currently summoning")
-        return
-      }
-
-      print("Auto-collecting summoned object after 3-second animation")
-
-      // Mark as collected to hide labels
-      collectedEntities.insert(entity)
-      hideLabelsForEntity(entity, anchor: anchor)
-
-      playCoinSound()
-
-      // Get the pin ID for this specific entity
-      let pinId = entityToPinId[entity] ?? "unknown"
-      print("Auto-collecting summoned entity with pinId: \(pinId)")
-
-      // Remove anchor from the base anchor
-      anchor.removeFromParent()
-
-      // Remove from coordinator arrays and mapping
-      if let anchorIndex = anchors.firstIndex(of: anchor) {
-        anchors.remove(at: anchorIndex)
-      }
-      coinEntities.remove(at: index)
-      if index < objectLocations.count {
-        objectLocations.remove(at: index)
-      }
-      entityToPinId.removeValue(forKey: entity)
-
-      // Clear summoning state
-      isSummoning = false
-      summoningEntity = nil
-      originalEntityPosition = nil
-      summonStartTime = nil
-
-      // Trigger callback with the specific pin ID
-      onCoinCollected?(pinId)
-    }
 
     private func findAnchorForEntity(_ entity: ModelEntity) -> AnchorEntity? {
       // Find the anchor that contains this entity
