@@ -8,6 +8,7 @@ import CoreLocation
 import Foundation  // For UUID
 import RealityKit
 import SwiftUI
+import Vision  // For hand pose detection
 
 extension CLLocationDirection {
   public var degreesToRadians: Double { return self * .pi / 180 }
@@ -23,6 +24,10 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var currentHuntType: HuntType?
   @Binding public var proximityMarkers: [ProximityMarkerData]
   @Binding public var pinData: [PinData]
+  @Binding public var handTrackingStatus: String
+  @Binding public var isDebugMode: Bool
+  @Binding public var showHandOverlay: Bool
+  @Binding public var showTargetPose: Bool
 
   public init(
     objectLocations: Binding<[CLLocationCoordinate2D]>,
@@ -33,7 +38,11 @@ public struct ARViewContainer: UIViewRepresentable {
     objectType: Binding<ARObjectType>,
     currentHuntType: Binding<HuntType?>,
     proximityMarkers: Binding<[ProximityMarkerData]>,
-    pinData: Binding<[PinData]>
+    pinData: Binding<[PinData]>,
+    handTrackingStatus: Binding<String>,
+    isDebugMode: Binding<Bool>,
+    showHandOverlay: Binding<Bool>,
+    showTargetPose: Binding<Bool>
   ) {
     print(
       "ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation)), heading=\(String(describing: heading.wrappedValue?.trueHeading)), huntType=\(String(describing: currentHuntType.wrappedValue)), proximityMarkers.count=\(proximityMarkers.wrappedValue.count))"
@@ -47,6 +56,10 @@ public struct ARViewContainer: UIViewRepresentable {
     self._currentHuntType = currentHuntType
     self._proximityMarkers = proximityMarkers
     self._pinData = pinData
+    self._handTrackingStatus = handTrackingStatus
+    self._isDebugMode = isDebugMode
+    self._showHandOverlay = showHandOverlay
+    self._showTargetPose = showTargetPose
   }
 
   // MARK: - UIViewRepresentable Methods
@@ -69,9 +82,26 @@ public struct ARViewContainer: UIViewRepresentable {
     arView.session.delegate = context.coordinator
     context.coordinator.arView = arView  // Assign weak reference
 
-    // DO NOT run the session here. It will be run by the Coordinator when North alignment is achieved.
-    // arView.session.run(worldConfig, options: [])
-    // worldConfig will be created and used in the Coordinator's startSessionAndPlaceObjects method.
+    // Check if AR World Tracking is supported on this device
+    if ARWorldTrackingConfiguration.isSupported {
+      print("ARViewContainer: AR World Tracking is supported. Starting AR session...")
+      context.coordinator.statusMessage = "Starting AR camera..."
+      // Start the AR session immediately to show camera feed
+      // Object placement will wait for North alignment, but camera should be visible
+      arView.session.run(worldConfig, options: [])
+
+      // Update status after a short delay
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        if context.coordinator.hasAlignedToNorth {
+          context.coordinator.statusMessage = "AR Ready - Objects placed"
+        } else {
+          context.coordinator.statusMessage = "Point North to place objects"
+        }
+      }
+    } else {
+      print("ARViewContainer: AR World Tracking is NOT supported on this device.")
+      context.coordinator.statusMessage = "AR not supported on this device"
+    }
 
     // Setup display link for animations
     let displayLink = CADisplayLink(
@@ -142,7 +172,9 @@ public struct ARViewContainer: UIViewRepresentable {
       statusMessage: $statusMessage,
       currentHuntType: $currentHuntType,  // Pass binding
       proximityMarkers: $proximityMarkers,  // Pass binding
-      pinData: $pinData
+      pinData: $pinData,
+      handTrackingStatus: $handTrackingStatus,
+      isDebugMode: $isDebugMode
     )
     // Set the placeObjectsAction on the newly created coordinator instance
     // The coordinator&#x27;s placeObjectsAction will call its own placeObjectsInARView method.
@@ -164,6 +196,8 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var currentHuntType: HuntType?  // Added binding
     @Binding public var proximityMarkers: [ProximityMarkerData]  // Added binding
     @Binding public var pinData: [PinData]
+    @Binding public var handTrackingStatusBinding: String
+    @Binding public var isDebugMode: Bool
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
 
     public var onCoinCollected: ((String) -> Void)?
@@ -175,6 +209,23 @@ public struct ARViewContainer: UIViewRepresentable {
     public var lastTimestamp: CFTimeInterval?
     public weak var arView: ARView?
     public var audioPlayer: AVAudioPlayer?  // Moved audio player here
+
+    // Hand gesture detection properties
+    public var handPoseRequest: VNDetectHumanHandPoseRequest?
+    public var isHandVisible: Bool = false
+    public var isSummoning: Bool = false
+    public var summoningEntity: ModelEntity?
+    public var originalEntityPosition: SIMD3<Float>?
+    public var summonStartTime: CFTimeInterval?
+    public let summonDuration: TimeInterval = 3.0  // Increased to 3 seconds for slower approach
+    public let proximityThreshold: Float = 3.048  // 10 feet in meters
+    public var collectedEntities: Set<ModelEntity> = []  // Track collected entities
+    public var frameCounter: Int = 0
+    public var handTrackingStatus: String = "Initializing..."
+    public var lastHandDetectionTime: Date?
+    public var lastHandPosition: CGPoint?
+
+    // Hand visualization properties removed - no longer needed
 
     // Base anchor for world alignment
     public var baseAnchor: AnchorEntity?
@@ -265,8 +316,10 @@ public struct ARViewContainer: UIViewRepresentable {
       statusMessage: Binding<String>,
       currentHuntType: Binding<HuntType?>,  // Added parameter
       proximityMarkers: Binding<[ProximityMarkerData]>,
-      pinData: Binding<[PinData]>
-    ) {  // Added parameter
+      pinData: Binding<[PinData]>,
+      handTrackingStatus: Binding<String>,
+      isDebugMode: Binding<Bool>
+    ) {  // Removed hand overlay parameters
       print("Coordinator init: Setting up.")
       self.referenceLocation = initialReferenceLocation  // Assign initial value
       self._objectLocations = objectLocations
@@ -275,10 +328,16 @@ public struct ARViewContainer: UIViewRepresentable {
       self._currentHuntType = currentHuntType  // Assign binding
       self._proximityMarkers = proximityMarkers  // Assign binding
       self._pinData = pinData
+      self._handTrackingStatusBinding = handTrackingStatus
+      self._isDebugMode = isDebugMode
 
       // Removed problematic referenceLocationObserver
 
       super.init()
+
+      // Setup hand pose detection
+      setupHandPoseDetection()
+
       print(
         "Coordinator init: Initial referenceLocation = \(String(describing: initialReferenceLocation)))"
       )
@@ -372,22 +431,26 @@ public struct ARViewContainer: UIViewRepresentable {
           let markerNumber = (pin?.order ?? index) + 1
           let pinId = pin?.id ?? "unknown"
           let shortId = pinId.prefix(8)
-          
+
           // Store the mapping between entity and pin ID
           self.entityToPinId[entity] = pinId
           self.coinEntities.append(entity)
-          
+
           // Add marker number label
           let numberLabel = createLabelEntity(text: "\(markerNumber)")
           numberLabel.position = [0, 0.25, 0]  // Higher position for number
           objectAnchor.addChild(numberLabel)
-          
-          // Add ID label
-          let idLabel = createLabelEntity(text: String(shortId))
-          idLabel.position = [0, 0.1, 0]  // Lower position for ID
-          objectAnchor.addChild(idLabel)
-          
-          print("Coordinator placeObjects: Added labels - Marker: \(markerNumber), ID: \(shortId), Entity mapped to pinId: \(pinId)")
+
+          // Add ID label only in debug mode
+          if self.isDebugMode {
+            let idLabel = createLabelEntity(text: String(shortId))
+            idLabel.position = [0, 0.1, 0]  // Lower position for ID
+            objectAnchor.addChild(idLabel)
+          }
+
+          print(
+            "Coordinator placeObjects: Added labels - Marker: \(markerNumber), ID: \(shortId), Entity mapped to pinId: \(pinId)"
+          )
 
           if let baseAnchor = self.baseAnchor {
             baseAnchor.addChild(objectAnchor)  // Add object's anchor to the main rotated baseAnchor
@@ -466,22 +529,26 @@ public struct ARViewContainer: UIViewRepresentable {
           let markerNumber = (pin?.order ?? index) + 1
           let pinId = pin?.id ?? "unknown"
           let shortId = pinId.prefix(8)
-          
+
           // Store the mapping between entity and pin ID
           self.entityToPinId[entity] = pinId
           self.coinEntities.append(entity)
-          
+
           // Add marker number label
           let numberLabel = createLabelEntity(text: "\(markerNumber)")
           numberLabel.position = [0, 0.25, 0]  // Higher position for number
           objectAnchor.addChild(numberLabel)
-          
-          // Add ID label
-          let idLabel = createLabelEntity(text: String(shortId))
-          idLabel.position = [0, 0.1, 0]  // Lower position for ID
-          objectAnchor.addChild(idLabel)
-          
-          print("Coordinator placeObjects: Added proximity labels - Marker: \(markerNumber), ID: \(shortId), Entity mapped to pinId: \(pinId)")
+
+          // Add ID label only in debug mode
+          if self.isDebugMode {
+            let idLabel = createLabelEntity(text: String(shortId))
+            idLabel.position = [0, 0.1, 0]  // Lower position for ID
+            objectAnchor.addChild(idLabel)
+          }
+
+          print(
+            "Coordinator placeObjects: Added proximity labels - Marker: \(markerNumber), ID: \(shortId), Entity mapped to pinId: \(pinId)"
+          )
 
           if let baseAnchor = self.baseAnchor {
             baseAnchor.addChild(objectAnchor)
@@ -694,8 +761,29 @@ public struct ARViewContainer: UIViewRepresentable {
 
         let distance = simd_distance(cameraPosition, entityWorldPosition)
 
-        if distance < 0.25 {  // Increased distance slightly for easier collection
-          print("Object collected at distance: \(distance)")
+        // Check for collection - either normal proximity or summoned object
+        let normalCollectionDistance: Float = 0.25
+        let summonedCollectionDistance: Float = 0.8  // Larger collection area for summoned objects
+        let isSummonedObject = (entity == summoningEntity)
+        let collectionThreshold =
+          isSummonedObject ? summonedCollectionDistance : normalCollectionDistance
+
+        if distance < collectionThreshold {
+          if isSummonedObject {
+            print("Summoned object collected at distance: \(distance)")
+            // Clear summoning state since object is being collected
+            isSummoning = false
+            summoningEntity = nil
+            originalEntityPosition = nil
+            summonStartTime = nil
+          } else {
+            print("Object collected at distance: \(distance)")
+          }
+
+          // Mark as collected to hide labels
+          collectedEntities.insert(entity)
+          hideLabelsForEntity(entity, anchor: anchor)
+
           playCoinSound()
 
           // Get the pin ID for this specific entity
@@ -732,6 +820,326 @@ public struct ARViewContainer: UIViewRepresentable {
       } catch {
         print("Failed to play coin sound: \(error)")
       }
+    }
+
+    // MARK: - Hand Pose Detection
+
+    private func setupHandPoseDetection() {
+      print("🤲 HAND_TRACKING: Setting up hand pose detection")
+      handTrackingStatusBinding = "Setting up..."
+
+      handPoseRequest = VNDetectHumanHandPoseRequest { [weak self] request, error in
+        if let error = error {
+          print("🚨 HAND_TRACKING: Hand pose detection error: \(error)")
+          DispatchQueue.main.async {
+            self?.handTrackingStatusBinding = "Error: \(error.localizedDescription)"
+          }
+          return
+        }
+
+        guard let observations = request.results as? [VNHumanHandPoseObservation] else {
+          print("🤲 HAND_TRACKING: No hand observations found")
+          DispatchQueue.main.async {
+            self?.handTrackingStatusBinding = "No hands detected"
+            self?.lastHandDetectionTime = nil
+          }
+          return
+        }
+
+        print("🤲 HAND_TRACKING: Found \(observations.count) hand observation(s)")
+
+        DispatchQueue.main.async {
+          self?.lastHandDetectionTime = Date()
+          self?.processHandPoseObservations(observations)
+        }
+      }
+
+      // Configure the request for hand visibility detection
+      handPoseRequest?.maximumHandCount = 1
+      handTrackingStatusBinding = "Ready - Show hand to summon"
+      print("🤲 HAND_TRACKING: Setup complete - maximum hands: 1")
+    }
+
+    private func processHandPoseObservations(_ observations: [VNHumanHandPoseObservation]) {
+      let currentTime = Date()
+
+      guard let observation = observations.first else {
+        // No hand detected - clear summoning state
+        if isHandVisible {
+          print("🤲 HAND_TRACKING: Hand no longer visible, stopping summoning")
+          isHandVisible = false
+          if isSummoning {
+            stopObjectSummoning()
+          }
+        }
+
+        // Hand visualization no longer needed
+
+        handTrackingStatusBinding = "No hand detected"
+        return
+      }
+
+      do {
+        // Hand landmarks no longer needed for simplified tracking
+
+        // Get wrist point for position tracking
+        let wristPoint = try observation.recognizedPoint(.wrist)
+
+        // Check if hand is visible with good confidence
+        guard wristPoint.confidence > 0.6 else {
+          print(
+            "🤲 HAND_TRACKING: Low confidence wrist detection: \(String(format: "%.2f", wristPoint.confidence))"
+          )
+          handTrackingStatusBinding = "Hand detection poor quality"
+          return
+        }
+
+        // Hand is visible and high quality - immediately activate summoning
+        let currentHandPosition = wristPoint.location
+
+        if !isHandVisible {
+          // Hand just became visible - start summoning immediately
+          print("🤲 HAND_TRACKING: Hand detected - immediately activating summoning!")
+          isHandVisible = true
+          startObjectSummoning()
+          if summoningEntity != nil {
+            isSummoning = true
+            handTrackingStatusBinding = "🚀 SUMMONING ACTIVE!"
+          } else {
+            handTrackingStatusBinding = "No objects nearby to summon"
+          }
+        } else if isSummoning && summoningEntity != nil {
+          // Continue summoning while hand remains visible
+          handTrackingStatusBinding = "🚀 SUMMONING CONTINUES!"
+        } else if summoningEntity == nil {
+          // Hand is visible but no object to summon
+          handTrackingStatusBinding = "Hand visible - no objects nearby"
+        }
+
+        // Update last position and time
+        lastHandPosition = currentHandPosition
+        lastHandDetectionTime = currentTime
+
+      } catch {
+        print("🚨 HAND_TRACKING: Error processing hand landmarks: \(error)")
+        handTrackingStatusBinding = "Hand tracking error"
+      }
+    }
+
+    // Removed complex hand landmark processing - now using simple wrist detection only
+
+    // Hand overlay and visualization methods removed - no longer needed for simplified summoning
+
+    // MARK: - Object Summoning
+
+    private func startObjectSummoning() {
+      // Don't start if already summoning the same object
+      guard summoningEntity == nil else { return }
+
+      guard let arView = arView, let camera = arView.session.currentFrame?.camera else {
+        return
+      }
+
+      let cameraTransform = camera.transform
+      let cameraPosition = SIMD3<Float>(
+        cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
+
+      // Find the closest entity within proximity threshold
+      var closestEntity: ModelEntity?
+      var closestDistance: Float = Float.infinity
+
+      for entity in coinEntities {
+        let entityWorldPosition = entity.position(relativeTo: nil)
+        let distance = simd_distance(cameraPosition, entityWorldPosition)
+
+        if distance <= proximityThreshold && distance < closestDistance {
+          closestDistance = distance
+          closestEntity = entity
+        }
+      }
+
+      guard let targetEntity = closestEntity else {
+        print("No objects within \(proximityThreshold) meters for summoning")
+        isSummoning = false
+        return
+      }
+
+      print("Summoning object at distance: \(closestDistance) meters")
+
+      // Store the original position and start summoning
+      summoningEntity = targetEntity
+      originalEntityPosition = targetEntity.position(relativeTo: nil)
+      summonStartTime = CACurrentMediaTime()
+      isSummoning = true
+
+      // Start the summoning animation
+      animateObjectTowardsUser(targetEntity, cameraPosition: cameraPosition)
+    }
+
+    private func stopObjectSummoning() {
+      guard let entity = summoningEntity,
+        let originalPosition = originalEntityPosition
+      else {
+        isSummoning = false
+        return
+      }
+
+      // Stop any ongoing animation and return object to original position
+      entity.stopAllAnimations()
+
+      // Animate back to original position
+      let returnTransform = Transform(translation: originalPosition)
+      entity.move(to: returnTransform, relativeTo: nil, duration: 0.5)
+
+      // Clear summoning state
+      isSummoning = false
+      summoningEntity = nil
+      originalEntityPosition = nil
+      summonStartTime = nil
+
+      print("Object summoning stopped, returning to original position")
+    }
+
+    private func animateObjectTowardsUser(_ entity: ModelEntity, cameraPosition: SIMD3<Float>) {
+      // Calculate direction from entity to camera
+      let entityPosition = entity.position(relativeTo: nil)
+      let direction = normalize(cameraPosition - entityPosition)
+      let totalDistance = simd_distance(entityPosition, cameraPosition)
+
+      // Create a slow-to-fast animation over exactly 3 seconds total
+      let stage1Duration: TimeInterval = 2.0  // Slow start - first 2 seconds
+      let stage2Duration: TimeInterval = 1.0  // Fast finish - final 1 second
+      
+      // Stage 1: Move 20% of the way very slowly with gentle upward arc
+      let stage1Distance = totalDistance * 0.2
+      let stage1Position = entityPosition + direction * stage1Distance
+      var stage1Transform = Transform(translation: stage1Position)
+      stage1Transform.translation.y += 0.15  // Higher upward arc for magical effect
+      
+      // Start very slow animation with easeOut for gradual acceleration
+      entity.move(to: stage1Transform, relativeTo: nil, duration: stage1Duration, timingFunction: .easeOut)
+      
+      // Stage 2: Move remaining 70% quickly to collection point
+      DispatchQueue.main.asyncAfter(deadline: .now() + stage1Duration) { [weak self] in
+        guard let self = self, entity == self.summoningEntity else { return }
+        
+        let finalDistance = totalDistance * 0.9  // 90% total for collection
+        let finalPosition = entityPosition + direction * finalDistance
+        let finalTransform = Transform(translation: finalPosition)
+        
+        // Fast final approach with easeIn for strong acceleration toward user
+        entity.move(to: finalTransform, relativeTo: nil, duration: stage2Duration, timingFunction: .easeIn)
+      }
+
+      // Add gentle floating animation throughout
+      addFloatingAnimation(to: entity, duration: summonDuration)
+
+      // Schedule automatic collection when animation completes (3 seconds + small buffer)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+        self?.collectSummonedObject(entity)
+      }
+    }
+
+    private func collectSummonedObject(_ entity: ModelEntity) {
+      guard entity == summoningEntity,
+        let anchor = findAnchorForEntity(entity),
+        let index = coinEntities.firstIndex(of: entity)
+      else {
+        print("Cannot collect summoned object - not found or not currently summoning")
+        return
+      }
+
+      print("Auto-collecting summoned object after 3-second animation")
+
+      // Mark as collected to hide labels
+      collectedEntities.insert(entity)
+      hideLabelsForEntity(entity, anchor: anchor)
+
+      playCoinSound()
+
+      // Get the pin ID for this specific entity
+      let pinId = entityToPinId[entity] ?? "unknown"
+      print("Auto-collecting summoned entity with pinId: \(pinId)")
+
+      // Remove anchor from the base anchor
+      anchor.removeFromParent()
+
+      // Remove from coordinator arrays and mapping
+      if let anchorIndex = anchors.firstIndex(of: anchor) {
+        anchors.remove(at: anchorIndex)
+      }
+      coinEntities.remove(at: index)
+      if index < objectLocations.count {
+        objectLocations.remove(at: index)
+      }
+      entityToPinId.removeValue(forKey: entity)
+
+      // Clear summoning state
+      isSummoning = false
+      summoningEntity = nil
+      originalEntityPosition = nil
+      summonStartTime = nil
+
+      // Trigger callback with the specific pin ID
+      onCoinCollected?(pinId)
+    }
+
+    private func findAnchorForEntity(_ entity: ModelEntity) -> AnchorEntity? {
+      // Find the anchor that contains this entity
+      for anchor in anchors {
+        if anchor.children.contains(where: { child in
+          if let modelEntity = child as? ModelEntity {
+            return modelEntity == entity
+          }
+          return false
+        }) {
+          return anchor
+        }
+      }
+      return nil
+    }
+
+    private func hideLabelsForEntity(_ entity: ModelEntity, anchor: AnchorEntity) {
+      // Hide all label children of the anchor
+      for child in anchor.children {
+        if child != entity {  // Don't hide the main entity, just the labels
+          child.isEnabled = false
+        }
+      }
+    }
+
+    private func addFloatingAnimation(to entity: ModelEntity, duration: TimeInterval) {
+      let floatDistance: Float = 0.1
+      let floatDuration: TimeInterval = 1.5
+
+      let startPosition = entity.transform.translation
+      let upPosition = startPosition + SIMD3<Float>(0, floatDistance, 0)
+      let downPosition = startPosition - SIMD3<Float>(0, floatDistance, 0)
+
+      var upAnimationDefinition = FromToByAnimation<Transform>(
+        from: Transform(translation: downPosition),
+        to: Transform(translation: upPosition),
+        duration: floatDuration,
+        timing: .easeInOut
+      )
+      upAnimationDefinition.repeatMode = .autoReverse // Set repeat mode on the definition
+
+      var downAnimationDefinition = FromToByAnimation<Transform>(
+        from: Transform(translation: upPosition),
+        to: Transform(translation: downPosition),
+        duration: floatDuration,
+        timing: .easeInOut
+      )
+      downAnimationDefinition.repeatMode = .autoReverse // Set repeat mode on the definition
+
+      let floatSequence = try! AnimationResource.sequence(with: [
+        AnimationResource.generate(with: upAnimationDefinition),
+        AnimationResource.generate(with: downAnimationDefinition)
+      ])
+
+      let floatingAnimation = try! floatSequence.repeat(duration: .infinity) // This will make the sequence repeat forever
+
+      entity.playAnimation(floatingAnimation, transitionDuration: 0.5, startsPaused: false)
     }
 
     // Method to clear all previously placed anchors
@@ -776,12 +1184,39 @@ public struct ARViewContainer: UIViewRepresentable {
       // Consider reloading configuration or resetting tracking
     }
 
-    // Implement didUpdate to capture heading updates
+    // Implement didUpdate to capture heading updates and process hand gestures
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
       // This delegate method is called frequently.
       // We only need the heading for initial alignment.
       // The heading is passed via the binding and observed in the Coordinator's didSet.
       // No need to process heading here if it's handled by the binding.
+
+      // Process hand gestures every few frames to avoid performance issues
+      frameCounter += 1
+
+      // Process hand pose detection every 6th frame (approximately 10 FPS on 60 FPS camera)
+      if frameCounter % 6 == 0 {
+        print("🤲 HAND_TRACKING: Processing frame #\(frameCounter)")
+        processHandPoseInFrame(frame)
+      }
+    }
+
+    private func processHandPoseInFrame(_ frame: ARFrame) {
+      guard let handPoseRequest = handPoseRequest else {
+        print("🚨 HAND_TRACKING: handPoseRequest is nil!")
+        return
+      }
+
+      let pixelBuffer = frame.capturedImage
+      let imageRequestHandler = VNImageRequestHandler(
+        cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+
+      do {
+        try imageRequestHandler.perform([handPoseRequest])
+        print("🤲 HAND_TRACKING: Vision request performed successfully")
+      } catch {
+        print("🚨 HAND_TRACKING: Failed to perform hand pose detection: \(error)")
+      }
     }
 
     // Helper function to parse direction string (e.g., "N32E") into radians
@@ -876,3 +1311,5 @@ public struct ARViewContainer: UIViewRepresentable {
     }
   }  // End Coordinator Class
 }  // End Struct ARViewContainer
+
+

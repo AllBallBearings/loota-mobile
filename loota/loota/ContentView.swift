@@ -15,6 +15,9 @@ public struct ContentView: View {
   @State private var pinData: [PinData] = []
   @State private var statusMessage: String = ""
   @State private var currentHuntType: HuntType?
+  @State private var handTrackingStatus: String = "Hand tracking ready"
+  @State private var isDebugMode: Bool = false
+  @State private var showHandGestureOverlay: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -55,7 +58,9 @@ public struct ContentView: View {
           objectType: $selectedObject,
           currentHuntType: $currentHuntType,
           proximityMarkers: $proximityMarkers,
-          pinData: $pinData
+          pinData: $pinData,
+          handTrackingStatus: $handTrackingStatus,
+          isDebugMode: $isDebugMode
         )
         // Use a combined ID that changes when hunt type or relevant data changes
         .id(
@@ -84,26 +89,28 @@ public struct ContentView: View {
         }
       }
 
-      // VStack for Heading and Accuracy Display (Top Center)
-      VStack {
-        Text(locationManager.trueHeadingString)
-          .font(.caption)
-          .foregroundColor(.white)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .background(Color.black.opacity(0.7))
-          .cornerRadius(8)
-        Text(locationManager.accuracyString)
-          .font(.caption)
-          .foregroundColor(.white)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .background(Color.black.opacity(0.7))
-          .cornerRadius(8)
-        Spacer()  // Pushes this VStack to the top
+      // VStack for Heading and Accuracy Display (Top Center) - Debug Mode Only
+      if isDebugMode {
+        VStack {
+          Text(locationManager.trueHeadingString)
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(8)
+          Text(locationManager.accuracyString)
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(8)
+          Spacer()  // Pushes this VStack to the top
+        }
+        .padding(.top, 10)  // Add some padding from the top edge
+        .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
       }
-      .padding(.top, 10)  // Add some padding from the top edge
-      .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
 
       // UI Overlay VStack
       VStack {
@@ -133,9 +140,36 @@ public struct ContentView: View {
 
           Spacer()  // Pushes object type text to the right
 
-          // Text displaying selected object type
+          // Debug toggle and Loot type display
           VStack(alignment: .trailing) {
-            Text("Object:")
+            // Top row with debug toggle and gesture help
+            HStack(spacing: 8) {
+              // Hand gesture help button
+              Button(action: {
+                showHandGestureOverlay = true
+              }) {
+                Text("🧙‍♂️")
+                  .font(.title2)
+              }
+              
+              // Debug toggle button
+              Button(action: {
+                isDebugMode.toggle()
+              }) {
+                Text(isDebugMode ? "🐛 DEBUG" : "🎮 PLAY")
+                  .font(.caption)
+                  .fontWeight(.bold)
+                  .foregroundColor(.white)
+                  .padding(.horizontal, 8)
+                  .padding(.vertical, 4)
+                  .background(isDebugMode ? Color.orange.opacity(0.9) : Color.black.opacity(0.8))
+                  .cornerRadius(8)
+                  .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 1)
+              }
+            }
+            
+            // Text displaying selected loot type
+            Text("Loot:")
               .font(.caption)
               .foregroundColor(.white)
             Text(selectedObject.rawValue)
@@ -147,29 +181,30 @@ public struct ContentView: View {
 
         Spacer()  // Pushes location display to bottom/right
 
-        // GPS Coordinates Display (Keep for debugging, maybe adapt for proximity?)
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Your Location:")
-            .font(.headline)
-            .foregroundColor(.white)
-          Text(String(format: "%.6f", currentLocation?.latitude ?? 0))
-            .font(.caption.monospacedDigit())
-            .foregroundColor(.white)
-          Text(String(format: "%.6f", currentLocation?.longitude ?? 0))
-            .font(.caption.monospacedDigit())
-            .foregroundColor(.white)
+        // Debug Information Panel - Only show in debug mode
+        if isDebugMode {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Your Location:")
+              .font(.headline)
+              .foregroundColor(.white)
+            Text(String(format: "%.6f", currentLocation?.latitude ?? 0))
+              .font(.caption.monospacedDigit())
+              .foregroundColor(.white)
+            Text(String(format: "%.6f", currentLocation?.longitude ?? 0))
+              .font(.caption.monospacedDigit())
+              .foregroundColor(.white)
 
-          // Display User Name
-          Text("User Name: \(huntDataManager.userName ?? "N/A")")
-            .font(.caption)
-            .foregroundColor(.white)
+            // Display User Name
+            Text("User Name: \(huntDataManager.userName ?? "N/A")")
+              .font(.caption)
+              .foregroundColor(.white)
 
-          Divider()
-            .background(Color.white)
-            .padding(.vertical, 4)
+            Divider()
+              .background(Color.white)
+              .padding(.vertical, 4)
 
-          // Display info based on hunt type
-          if currentHuntType == .geolocation {
+            // Display info based on hunt type
+            if currentHuntType == .geolocation {
             Text("Geolocation Objects (\(objectLocations.count)):")
               .font(.headline)
               .foregroundColor(.white)
@@ -205,6 +240,21 @@ public struct ContentView: View {
               .foregroundColor(.white)
           }
 
+          Divider()
+            .background(Color.white)
+            .padding(.vertical, 4)
+
+          // Hand Tracking Status
+          Text("Hand Tracking:")
+            .font(.headline)
+            .foregroundColor(.white)
+          Text(handTrackingStatus)
+            .font(.caption)
+            .foregroundColor(handTrackingStatus.contains("🚀") ? .green : .yellow)
+            .multilineTextAlignment(.center)
+            
+          // Hand overlay toggles removed - simplified summoning no longer needs them
+
           // Status message display (errors)
           Text(huntDataManager.errorMessage ?? statusMessage)
             .font(.headline)
@@ -239,11 +289,19 @@ public struct ContentView: View {
               .font(.caption)
               .foregroundColor(.green)
           }
+          }
+          .padding()
+          .background(Color.black.opacity(0.6))
+          .cornerRadius(10)
+          .padding()
         }
-        .padding()
-        .background(Color.black.opacity(0.6))
-        .cornerRadius(10)
-        .padding()
+      }
+      
+      // Hand Gesture Overlay
+      if showHandGestureOverlay {
+        HandGestureOverlay(onDismiss: {
+          showHandGestureOverlay = false
+        })
       }
     }
     .onChange(of: selectedObject) { oldValue, newValue in
@@ -301,6 +359,13 @@ public struct ContentView: View {
           huntDataManager.joinHunt(huntId: huntData.id)
         }
         loadHuntData(huntData)
+        
+        // Show gesture overlay when hunt loads (unless in debug mode)
+        if !isDebugMode && (huntData.pins.count > 0) {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            showHandGestureOverlay = true
+          }
+        }
       }
     }
   }
@@ -373,6 +438,115 @@ public struct ContentView: View {
       self.currentHuntType = nil
       self.selectedObject = .none
       print("ContentView displayErrorMessage: \(message)")
+    }
+  }
+}
+
+// MARK: - Hand Gesture Overlay
+
+struct HandGestureOverlay: View {
+  let onDismiss: () -> Void
+  
+  var body: some View {
+    ZStack {
+      // Semi-transparent background
+      Color.black.opacity(0.8)
+        .edgesIgnoringSafeArea(.all)
+        .onTapGesture {
+          onDismiss()
+        }
+      
+      VStack(spacing: 20) {
+        // Title
+        Text("🧙‍♂️ Spell Casting Gesture")
+          .font(.title2)
+          .fontWeight(.bold)
+          .foregroundColor(.white)
+          .multilineTextAlignment(.center)
+        
+        // Hand illustration using text/emoji
+        VStack(spacing: 15) {
+          Text("✋")
+            .font(.system(size: 80))
+            .rotationEffect(.degrees(-15)) // Slight angle like casting toward object
+          
+          Text("👆 Palm facing TOWARD the object")
+            .font(.headline)
+            .foregroundColor(.yellow)
+            .multilineTextAlignment(.center)
+          
+          Text("🖐️ Fingers extended (like casting a spell)")
+            .font(.subheadline)
+            .foregroundColor(.white)
+            .multilineTextAlignment(.center)
+          
+          Text("📏 Stay within 10 feet of the object")
+            .font(.subheadline)
+            .foregroundColor(.cyan)
+            .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 20)
+        
+        // Instructions
+        VStack(spacing: 12) {
+          Text("How to Cast:")
+            .font(.headline)
+            .foregroundColor(.white)
+          
+          HStack(alignment: .top, spacing: 10) {
+            Text("1.")
+              .font(.subheadline)
+              .foregroundColor(.yellow)
+            Text("Extend your arm toward the object")
+              .font(.subheadline)
+              .foregroundColor(.white)
+          }
+          
+          HStack(alignment: .top, spacing: 10) {
+            Text("2.")
+              .font(.subheadline)
+              .foregroundColor(.yellow)
+            Text("Turn your palm to face the object (away from camera)")
+              .font(.subheadline)
+              .foregroundColor(.white)
+          }
+          
+          HStack(alignment: .top, spacing: 10) {
+            Text("3.")
+              .font(.subheadline)
+              .foregroundColor(.yellow)
+            Text("Keep fingers extended like a wizard or Jedi")
+              .font(.subheadline)
+              .foregroundColor(.white)
+          }
+          
+          HStack(alignment: .top, spacing: 10) {
+            Text("4.")
+              .font(.subheadline)
+              .foregroundColor(.yellow)
+            Text("Hold steady until object floats toward you")
+              .font(.subheadline)
+              .foregroundColor(.white)
+          }
+        }
+        .padding(.horizontal, 20)
+        
+        // Dismiss button
+        Button(action: onDismiss) {
+          Text("Got it! ⚡")
+            .font(.headline)
+            .foregroundColor(.black)
+            .padding(.horizontal, 30)
+            .padding(.vertical, 12)
+            .background(Color.yellow)
+            .cornerRadius(25)
+        }
+        .padding(.top, 20)
+      }
+      .padding(30)
+      .background(Color.gray.opacity(0.1))
+      .cornerRadius(20)
+      .padding(.horizontal, 20)
     }
   }
 }
