@@ -190,6 +190,16 @@ public class HuntDataManager: ObservableObject {
             print("DEBUG: HuntDataManager - Marker \(displayNumber): ID: \(pin.id ?? "nil"), Order: \(pin.order ?? -1), Lat: \(pin.lat ?? 0), Lng: \(pin.lng ?? 0)")
           }
           
+          // Check if server has pins that we think are collected (indicating server reset)
+          let serverPinIDs = Set(data.pins.compactMap { $0.id })
+          let conflictingPins = self.collectedPinIDs.intersection(serverPinIDs)
+          
+          if !conflictingPins.isEmpty {
+            print("DEBUG: HuntDataManager - fetchHunt: Server has \(conflictingPins.count) pins that we thought were collected, clearing cache")
+            print("DEBUG: HuntDataManager - fetchHunt: Conflicting pin IDs: \(conflictingPins)")
+            self.clearCollectedPins()
+          }
+          
           data.pins.removeAll { self.collectedPinIDs.contains($0.id ?? "") }
           print("DEBUG: HuntDataManager - fetchHunt: After filtering collected pins, \(data.pins.count) pins remain")
           

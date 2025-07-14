@@ -22,7 +22,21 @@ public class APIService {
       case .decodingError(let error):
         return "Failed to decode server response: \(error.localizedDescription)"
       case .serverError(let statusCode, let message):
-        return "Server error \(statusCode): \(message ?? "No message provided")"
+        // Handle specific status codes with user-friendly messages
+        switch statusCode {
+        case 404:
+          // Special handling for hunt not found errors
+          if let message = message, message.contains("Hunt not found") {
+            return "This treasure hunt link has expired or is no longer available. Please check with the hunt organizer for a new link."
+          }
+          return "The requested hunt could not be found. Please check your hunt link and try again."
+        case 400:
+          return "There was a problem with your request. Please try again."
+        case 500...599:
+          return "The treasure hunt server is temporarily unavailable. Please try again in a few minutes."
+        default:
+          return "Server error \(statusCode): \(message ?? "No message provided")"
+        }
       case .unknownError:
         return "An unknown error occurred."
       }

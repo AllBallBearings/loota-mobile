@@ -4,5 +4,11 @@
 <dict>
 	<key>NSAppTransportSecurity</key>
 	<dict/>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera for augmented reality treasure hunting experiences.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app uses location services to place virtual treasures at real-world locations.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app uses location services to place virtual treasures at real-world locations.</string>
 </dict>
 </plist>

@@ -15,6 +15,9 @@ public struct ContentView: View {
   @State private var pinData: [PinData] = []
   @State private var statusMessage: String = ""
   @State private var currentHuntType: HuntType?
+  @State private var handTrackingStatus: String = "Hand tracking ready"
+  @State private var isDebugMode: Bool = false
+  @State private var showSummoningHint: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -39,7 +42,9 @@ public struct ContentView: View {
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
           onCoinCollected: { collectedPinId in
+            print("🎯 CONTENTVIEW: onCoinCollected called with pinId: \(collectedPinId)")
             coinsCollected += 1
+            print("🎯 CONTENTVIEW: Counter incremented to: \(coinsCollected)")
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
               animate = true
             }
@@ -49,19 +54,21 @@ public struct ContentView: View {
             }
 
             if let huntId = huntDataManager.huntData?.id {
+              print("🎯 CONTENTVIEW: Calling API with huntId: \(huntId), pinId: \(collectedPinId)")
               huntDataManager.collectPin(huntId: huntId, pinId: collectedPinId)
+            } else {
+              print("🎯 CONTENTVIEW: No huntId available for API call")
             }
           },
           objectType: $selectedObject,
           currentHuntType: $currentHuntType,
           proximityMarkers: $proximityMarkers,
-          pinData: $pinData
+          pinData: $pinData,
+          handTrackingStatus: $handTrackingStatus,
+          isDebugMode: $isDebugMode
         )
-        // Use a combined ID that changes when hunt type or relevant data changes
-        .id(
-          currentHuntType.map { $0.rawValue } ?? "none" + "\(objectLocations.count)"
-            + "\(proximityMarkers.count)"
-        )
+        // Use a stable ID that doesn't change during active gameplay
+        .id("ar-view-\(currentHuntType?.rawValue ?? "none")")
         .edgesIgnoringSafeArea(.all)
       } else {
         // Placeholder when no object is selected or no data loaded
@@ -84,27 +91,46 @@ public struct ContentView: View {
         }
       }
 
-      // VStack for Heading and Accuracy Display (Top Center)
-      VStack {
-        Text(locationManager.trueHeadingString)
-          .font(.caption)
-          .foregroundColor(.white)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .background(Color.black.opacity(0.7))
-          .cornerRadius(8)
-        Text(locationManager.accuracyString)
-          .font(.caption)
-          .foregroundColor(.white)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .background(Color.black.opacity(0.7))
-          .cornerRadius(8)
-        Spacer()  // Pushes this VStack to the top
+      // VStack for Heading and Accuracy Display (Top Center) - Debug Mode Only
+      if isDebugMode {
+        VStack {
+          Text(locationManager.trueHeadingString)
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(8)
+          Text(locationManager.accuracyString)
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(8)
+          Spacer()  // Pushes this VStack to the top
+        }
+        .padding(.top, 10)  // Add some padding from the top edge
+        .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
       }
-      .padding(.top, 10)  // Add some padding from the top edge
-      .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
 
+      // Summoning hint message (bottom center) - only when objects are within range
+      if showSummoningHint {
+        VStack {
+          Spacer()
+          
+          Text("🧙‍♂️ If loot is just out of reach, then summon it with an outstretched hand")
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(12)
+            .padding(.bottom, 120) // Above the debug panel
+        }
+        .frame(maxWidth: .infinity)
+      }
+      
       // UI Overlay VStack
       VStack {
         HStack(alignment: .top) {  // Top Row: Counter and Object Type Display
@@ -133,9 +159,29 @@ public struct ContentView: View {
 
           Spacer()  // Pushes object type text to the right
 
-          // Text displaying selected object type
+          // Debug toggle and Loot type display
           VStack(alignment: .trailing) {
-            Text("Object:")
+            // Top row with debug toggle and gesture help
+            HStack(spacing: 8) {
+              
+              // Debug toggle button
+              Button(action: {
+                isDebugMode.toggle()
+              }) {
+                Text(isDebugMode ? "🐛 DEBUG" : "🎮 PLAY")
+                  .font(.caption)
+                  .fontWeight(.bold)
+                  .foregroundColor(.white)
+                  .padding(.horizontal, 8)
+                  .padding(.vertical, 4)
+                  .background(isDebugMode ? Color.orange.opacity(0.9) : Color.black.opacity(0.8))
+                  .cornerRadius(8)
+                  .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 1)
+              }
+            }
+            
+            // Text displaying selected loot type
+            Text("Loot:")
               .font(.caption)
               .foregroundColor(.white)
             Text(selectedObject.rawValue)
@@ -147,29 +193,30 @@ public struct ContentView: View {
 
         Spacer()  // Pushes location display to bottom/right
 
-        // GPS Coordinates Display (Keep for debugging, maybe adapt for proximity?)
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Your Location:")
-            .font(.headline)
-            .foregroundColor(.white)
-          Text(String(format: "%.6f", currentLocation?.latitude ?? 0))
-            .font(.caption.monospacedDigit())
-            .foregroundColor(.white)
-          Text(String(format: "%.6f", currentLocation?.longitude ?? 0))
-            .font(.caption.monospacedDigit())
-            .foregroundColor(.white)
+        // Debug Information Panel - Only show in debug mode
+        if isDebugMode {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Your Location:")
+              .font(.headline)
+              .foregroundColor(.white)
+            Text(String(format: "%.6f", currentLocation?.latitude ?? 0))
+              .font(.caption.monospacedDigit())
+              .foregroundColor(.white)
+            Text(String(format: "%.6f", currentLocation?.longitude ?? 0))
+              .font(.caption.monospacedDigit())
+              .foregroundColor(.white)
 
-          // Display User Name
-          Text("User Name: \(huntDataManager.userName ?? "N/A")")
-            .font(.caption)
-            .foregroundColor(.white)
+            // Display User Name
+            Text("User Name: \(huntDataManager.userName ?? "N/A")")
+              .font(.caption)
+              .foregroundColor(.white)
 
-          Divider()
-            .background(Color.white)
-            .padding(.vertical, 4)
+            Divider()
+              .background(Color.white)
+              .padding(.vertical, 4)
 
-          // Display info based on hunt type
-          if currentHuntType == .geolocation {
+            // Display info based on hunt type
+            if currentHuntType == .geolocation {
             Text("Geolocation Objects (\(objectLocations.count)):")
               .font(.headline)
               .foregroundColor(.white)
@@ -205,6 +252,20 @@ public struct ContentView: View {
               .foregroundColor(.white)
           }
 
+          Divider()
+            .background(Color.white)
+            .padding(.vertical, 4)
+
+          // Hand Tracking Status
+          Text("Hand Tracking:")
+            .font(.headline)
+            .foregroundColor(.white)
+          Text(handTrackingStatus)
+            .font(.caption)
+            .foregroundColor(handTrackingStatus.contains("🚀") ? .green : .yellow)
+            .multilineTextAlignment(.center)
+            
+
           // Status message display (errors)
           Text(huntDataManager.errorMessage ?? statusMessage)
             .font(.headline)
@@ -239,12 +300,14 @@ public struct ContentView: View {
               .font(.caption)
               .foregroundColor(.green)
           }
+          }
+          .padding()
+          .background(Color.black.opacity(0.6))
+          .cornerRadius(10)
+          .padding()
         }
-        .padding()
-        .background(Color.black.opacity(0.6))
-        .cornerRadius(10)
-        .padding()
       }
+      
     }
     .onChange(of: selectedObject) { oldValue, newValue in
       // Clear locations when object type changes to none.
@@ -262,6 +325,9 @@ public struct ContentView: View {
     .onReceive(locationManager.$currentLocation) { location in
       currentLocation = location
       print("ContentView onReceive: Updated currentLocation: \(String(describing: location))")
+      
+      // Check if we should show summoning hint
+      updateSummoningHintVisibility()
     }
     .onReceive(locationManager.$heading) { newHeading in
       print(
@@ -301,6 +367,7 @@ public struct ContentView: View {
           huntDataManager.joinHunt(huntId: huntData.id)
         }
         loadHuntData(huntData)
+        
       }
     }
   }
@@ -361,8 +428,47 @@ public struct ContentView: View {
       self.selectedObject = .coin  // Default to coin for proximity
       print("ContentView loadHuntData: Total proximity markers created: \(self.proximityMarkers.count)")
     }
+    
+    // Check if summoning hint should be shown after loading hunt data
+    updateSummoningHintVisibility()
   }
 
+
+  // Method to check if summoning hint should be shown
+  private func updateSummoningHintVisibility() {
+    guard let currentLoc = currentLocation else {
+      showSummoningHint = false
+      return
+    }
+    
+    // Check if hunt is loaded and has objects
+    guard currentHuntType != nil, !objectLocations.isEmpty || !proximityMarkers.isEmpty else {
+      showSummoningHint = false
+      return
+    }
+    
+    let proximityThreshold: Double = 30.48 // 100 feet in meters
+    var hasNearbyObjects = false
+    
+    if currentHuntType == .geolocation {
+      // Check distance to geolocation objects
+      for objLocation in objectLocations {
+        let objCLLocation = CLLocation(latitude: objLocation.latitude, longitude: objLocation.longitude)
+        let userCLLocation = CLLocation(latitude: currentLoc.latitude, longitude: currentLoc.longitude)
+        let distance = userCLLocation.distance(from: objCLLocation)
+        
+        if distance <= proximityThreshold {
+          hasNearbyObjects = true
+          break
+        }
+      }
+    } else if currentHuntType == .proximity {
+      // For proximity hunts, assume objects are within range (they're positioned relative to user)
+      hasNearbyObjects = !proximityMarkers.isEmpty
+    }
+    
+    showSummoningHint = hasNearbyObjects
+  }
 
   // Method to display error messages from AppDelegate
   public func displayErrorMessage(_ message: String) {
@@ -372,7 +478,9 @@ public struct ContentView: View {
       self.proximityMarkers = []
       self.currentHuntType = nil
       self.selectedObject = .none
+      self.showSummoningHint = false
       print("ContentView displayErrorMessage: \(message)")
     }
   }
 }
+
