@@ -17,6 +17,7 @@ public struct ContentView: View {
   @State private var currentHuntType: HuntType?
   @State private var handTrackingStatus: String = "Hand tracking ready"
   @State private var isDebugMode: Bool = false
+  @State private var showSummoningHint: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -41,7 +42,9 @@ public struct ContentView: View {
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
           onCoinCollected: { collectedPinId in
+            print("🎯 CONTENTVIEW: onCoinCollected called with pinId: \(collectedPinId)")
             coinsCollected += 1
+            print("🎯 CONTENTVIEW: Counter incremented to: \(coinsCollected)")
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
               animate = true
             }
@@ -51,7 +54,10 @@ public struct ContentView: View {
             }
 
             if let huntId = huntDataManager.huntData?.id {
+              print("🎯 CONTENTVIEW: Calling API with huntId: \(huntId), pinId: \(collectedPinId)")
               huntDataManager.collectPin(huntId: huntId, pinId: collectedPinId)
+            } else {
+              print("🎯 CONTENTVIEW: No huntId available for API call")
             }
           },
           objectType: $selectedObject,
@@ -61,11 +67,8 @@ public struct ContentView: View {
           handTrackingStatus: $handTrackingStatus,
           isDebugMode: $isDebugMode
         )
-        // Use a combined ID that changes when hunt type or relevant data changes
-        .id(
-          currentHuntType.map { $0.rawValue } ?? "none" + "\(objectLocations.count)"
-            + "\(proximityMarkers.count)"
-        )
+        // Use a stable ID that doesn't change during active gameplay
+        .id("ar-view-\(currentHuntType?.rawValue ?? "none")")
         .edgesIgnoringSafeArea(.all)
       } else {
         // Placeholder when no object is selected or no data loaded
@@ -111,20 +114,22 @@ public struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
       }
 
-      // Summoning hint message (bottom center)
-      VStack {
-        Spacer()
-        
-        Text("🧙‍♂️ If loot is just out of reach, then summon it with an outstretched hand")
-          .font(.caption)
-          .foregroundColor(.white)
-          .padding(.horizontal, 12)
-          .padding(.vertical, 8)
-          .background(Color.black.opacity(0.7))
-          .cornerRadius(12)
-          .padding(.bottom, 120) // Above the debug panel
+      // Summoning hint message (bottom center) - only when objects are within range
+      if showSummoningHint {
+        VStack {
+          Spacer()
+          
+          Text("🧙‍♂️ If loot is just out of reach, then summon it with an outstretched hand")
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(12)
+            .padding(.bottom, 120) // Above the debug panel
+        }
+        .frame(maxWidth: .infinity)
       }
-      .frame(maxWidth: .infinity)
       
       // UI Overlay VStack
       VStack {
@@ -320,6 +325,9 @@ public struct ContentView: View {
     .onReceive(locationManager.$currentLocation) { location in
       currentLocation = location
       print("ContentView onReceive: Updated currentLocation: \(String(describing: location))")
+      
+      // Check if we should show summoning hint
+      updateSummoningHintVisibility()
     }
     .onReceive(locationManager.$heading) { newHeading in
       print(
@@ -420,8 +428,47 @@ public struct ContentView: View {
       self.selectedObject = .coin  // Default to coin for proximity
       print("ContentView loadHuntData: Total proximity markers created: \(self.proximityMarkers.count)")
     }
+    
+    // Check if summoning hint should be shown after loading hunt data
+    updateSummoningHintVisibility()
   }
 
+
+  // Method to check if summoning hint should be shown
+  private func updateSummoningHintVisibility() {
+    guard let currentLoc = currentLocation else {
+      showSummoningHint = false
+      return
+    }
+    
+    // Check if hunt is loaded and has objects
+    guard currentHuntType != nil, !objectLocations.isEmpty || !proximityMarkers.isEmpty else {
+      showSummoningHint = false
+      return
+    }
+    
+    let proximityThreshold: Double = 30.48 // 100 feet in meters
+    var hasNearbyObjects = false
+    
+    if currentHuntType == .geolocation {
+      // Check distance to geolocation objects
+      for objLocation in objectLocations {
+        let objCLLocation = CLLocation(latitude: objLocation.latitude, longitude: objLocation.longitude)
+        let userCLLocation = CLLocation(latitude: currentLoc.latitude, longitude: currentLoc.longitude)
+        let distance = userCLLocation.distance(from: objCLLocation)
+        
+        if distance <= proximityThreshold {
+          hasNearbyObjects = true
+          break
+        }
+      }
+    } else if currentHuntType == .proximity {
+      // For proximity hunts, assume objects are within range (they're positioned relative to user)
+      hasNearbyObjects = !proximityMarkers.isEmpty
+    }
+    
+    showSummoningHint = hasNearbyObjects
+  }
 
   // Method to display error messages from AppDelegate
   public func displayErrorMessage(_ message: String) {
@@ -431,6 +478,7 @@ public struct ContentView: View {
       self.proximityMarkers = []
       self.currentHuntType = nil
       self.selectedObject = .none
+      self.showSummoningHint = false
       print("ContentView displayErrorMessage: \(message)")
     }
   }
