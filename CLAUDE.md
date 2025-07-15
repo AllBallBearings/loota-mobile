@@ -12,6 +12,7 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 
 - Open `loota/loota.xcodeproj` in Xcode
 - Build and run with Xcode (⌘+R)
+- Command line build: `cd loota && xcodebuild -project loota.xcodeproj -scheme loota -configuration Debug build`
 - Run tests with Xcode (⌘+U)
 
 ### Testing
@@ -32,6 +33,8 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 - Manages hunt data loading and AR object placement
 - Handles location updates and compass heading
 - Switches between geolocation and proximity hunt modes
+- Implements app startup flow: splash screen → loading indicator → main content
+- Contains user name prompt and initialization state management
 
 **ARViewContainer.swift**: UIViewRepresentable wrapper for RealityKit ARView
 
@@ -66,7 +69,7 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 
 ### AR System Architecture
 
-1. **North Alignment**: App waits for user to point device North before starting AR session with `.gravityAndHeading` world alignment
+1. **Automatic North Alignment**: App uses `.gravityAndHeading` world alignment for automatic North orientation without user intervention
 2. **Base Anchor System**: Creates base anchor at world origin aligned with magnetic North for consistent object placement
 3. **Coordinate Systems**:
    - Geolocation: GPS coordinates converted to AR world positions relative to user location
@@ -103,7 +106,16 @@ The app integrates Vision framework for hand pose detection to enable "spell cas
 **Registration & State**: Uses device UUID for identification with sophisticated name management:
 - **Detection**: `shouldPromptForName` determines when to show name prompt vs. rejoin existing user
 - **Sync**: Compares local `@AppStorage` names with database for consistency
+- **Name Prompt**: Alert dialog with OK/Cancel options, defaults to "Anonymous" for empty/cancelled input
 - **Backend**: POST `/api/users/register` and PUT `/api/users/{userId}` (pending implementation)
+
+### App Startup Flow
+
+**Multi-stage Initialization**: Polished startup experience with visual feedback:
+1. **Splash Screen**: 2-second animated "Loota" branding with purple gradient and glow effects
+2. **Loading Overlay**: Progress indicator during location services and hunt data initialization  
+3. **Name Prompt**: User registration dialog if needed (can be dismissed with Cancel)
+4. **Main Content**: Transitions to AR experience when ready
 
 ### Deep Linking
 
@@ -119,6 +131,8 @@ The app handles deep links from the web platform to launch directly into specifi
 - `LocationManager.swift`: GPS and compass functionality
 - `CoinEntity.swift`: 3D coin model factory
 - `AppDelegate.swift`: App lifecycle and deep link handling
+- `SplashScreen.swift`: Animated startup screen with Loota branding
+- `LoadingIndicator.swift`: Progress overlay for hunt initialization
 
 ## Network Architecture
 
