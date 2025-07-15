@@ -68,7 +68,7 @@ public struct ARViewContainer: UIViewRepresentable {
 
     // Configure AR session for world tracking
     let worldConfig = ARWorldTrackingConfiguration()
-    worldConfig.worldAlignment = .gravity  // Explicitly set to ensure no ARKit heading alignment
+    worldConfig.worldAlignment = .gravityAndHeading  // Let ARKit automatically align to North
     worldConfig.environmentTexturing = .automatic
     worldConfig.planeDetection = [.horizontal, .vertical]  // Keep plane detection if needed
 
@@ -84,13 +84,11 @@ public struct ARViewContainer: UIViewRepresentable {
       // Object placement will wait for North alignment, but camera should be visible
       arView.session.run(worldConfig, options: [])
 
-      // Update status after a short delay
+      // Update status after a short delay to allow AR to initialize
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-        if context.coordinator.hasAlignedToNorth {
-          context.coordinator.statusMessage = "AR Ready - Objects placed"
-        } else {
-          context.coordinator.statusMessage = "Point North to place objects"
-        }
+        context.coordinator.statusMessage = "AR Ready - Looking for objects..."
+        // Automatically attempt to place objects after AR initializes
+        context.coordinator.attemptPlacementIfReady()
       }
     } else {
       print("ARViewContainer: AR World Tracking is NOT supported on this device.")
@@ -239,58 +237,9 @@ public struct ARViewContainer: UIViewRepresentable {
           "Coordinator heading.didSet: New heading: \(String(describing: newTrueHeading)) (acc: \(String(describing: newAccuracy))), Old: \(String(describing: oldTrueHeading)) (acc: \(String(describing: oldAccuracy))), hasAlignedToNorth: \(hasAlignedToNorth)"
         )
 
-        // Only attempt to mark as "aligned" (user physically aligned to North) once,
-        // if we have a sufficiently accurate heading AND user is pointing North.
-        let NORTH_ALIGNMENT_TOLERANCE: CLLocationDirection = 10.0  // Degrees
-        let ACCURACY_THRESHOLD: CLLocationAccuracy = 30.0  // Degrees (Temporarily relaxed from 20.0 for testing)
-
-        if !hasAlignedToNorth,
-          let th = newTrueHeading, th >= 0,  // Valid heading number
-          let acc = newAccuracy, acc > 0 && acc < ACCURACY_THRESHOLD,  // Good accuracy
-          abs(th) < NORTH_ALIGNMENT_TOLERANCE || abs(th - 360.0) < NORTH_ALIGNMENT_TOLERANCE,  // Pointing North
-          let arView = arView
-        {
-
-          print(
-            "Coordinator heading.didSet: User IS pointing North (Heading: \(th)°, Acc: \(acc)°). Conditions MET."
-          )
-
-          self.statusMessage = "North detected. Starting AR session..."
-          print("Coordinator heading.didSet: Attempting to start AR session.")
-
-          // Set hasAlignedToNorth to prevent this block from running again.
-          hasAlignedToNorth = true
-
-          // Call method to start the session and then place objects.
-          startSessionAndPlaceObjects()
-
-        } else {
-          // Update status message to guide user or explain why not proceeding
-          if hasAlignedToNorth {
-            // Already "aligned" and placed, no further status needed from here unless resetting
-          } else if let th = newTrueHeading, th >= 0, let acc = newAccuracy,
-            acc > 0 && acc < ACCURACY_THRESHOLD
-          {
-            self.statusMessage = String(
-              format: "Point North (0° ±%.0f°). Current: %.1f°", NORTH_ALIGNMENT_TOLERANCE, th)
-          } else if let acc = newAccuracy, acc >= ACCURACY_THRESHOLD {
-            self.statusMessage = String(
-              format: "Improve compass accuracy (current: %.1f°). Try figure-eight motion.", acc)
-          } else {
-            self.statusMessage = "Point North. Waiting for good heading..."
-          }
-
-          let reasonNotReady = """
-            hasAlignedToNorth=\(hasAlignedToNorth), \
-            newTrueHeading=\(String(describing: newTrueHeading)) (valid: \((newTrueHeading ?? -1) >= 0)), \
-            newAccuracy=\(String(describing: newAccuracy)) (sufficient for check: \((newAccuracy ?? -1) > 0 && (newAccuracy ?? 999) < ACCURACY_THRESHOLD)), \
-            pointingNorthCheck: \( (abs(newTrueHeading ?? 999) < NORTH_ALIGNMENT_TOLERANCE || abs((newTrueHeading ?? 999) - 360.0) < NORTH_ALIGNMENT_TOLERANCE) ), \
-            arView is nil=\(arView == nil)
-            """
-          print(
-            "Coordinator heading.didSet: Conditions for North alignment NOT MET or already aligned. Details: \(reasonNotReady)"
-          )
-        }
+        // With .gravityAndHeading, ARKit automatically handles North alignment
+        // Just attempt placement if conditions are ready
+        attemptPlacementIfReady()
       }
     }
     public var hasAlignedToNorth = false  // True when user is physically pointing North with good accuracy.
@@ -344,9 +293,9 @@ public struct ARViewContainer: UIViewRepresentable {
 
     public func attemptPlacementIfReady() {
       print(
-        "Coordinator attemptPlacementIfReady: Checking conditions. hasAlignedToNorth=\(hasAlignedToNorth), referenceLocationIsNil=\(self.referenceLocation == nil), hasPlacedObjects=\(hasPlacedObjects), arViewIsNil=\(self.arView == nil)"
+        "Coordinator attemptPlacementIfReady: Checking conditions. referenceLocationIsNil=\(self.referenceLocation == nil), hasPlacedObjects=\(hasPlacedObjects), arViewIsNil=\(self.arView == nil)"
       )
-      guard hasAlignedToNorth, self.referenceLocation != nil, !hasPlacedObjects,
+      guard self.referenceLocation != nil, !hasPlacedObjects,
         let arView = self.arView
       else {
         print("Coordinator attemptPlacementIfReady: Conditions not met or already placed.")

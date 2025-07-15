@@ -3,7 +3,6 @@
 import CoreLocation
 //import DataModels  // Import DataModels to access ARObjectType, HuntType, ProximityMarkerData
 import SwiftUI
-import loota
 
 public struct ContentView: View {
   @State private var coinsCollected: Int = 0
@@ -23,12 +22,46 @@ public struct ContentView: View {
   @StateObject private var huntDataManager = HuntDataManager.shared
   @State private var showingNamePrompt = false
   @State private var userName = ""
+  @State private var isInitializing = true
+  @State private var showingSplash = true
 
   public init() {
     print("DEBUG: ContentView - init() called.")
   }
 
   public var body: some View {
+    ZStack {
+      // Show splash screen first
+      if showingSplash {
+        SplashScreen()
+          .transition(.opacity)
+      }
+      // Main app content (always present after splash)
+      else {
+        mainAppContent
+          .disabled(isInitializing) // Disable interaction during loading
+        
+        // Loading indicator overlay
+        if isInitializing {
+          LoadingIndicator(message: "Initializing Hunt...", showProgress: true)
+            .transition(.opacity)
+        }
+      }
+    }
+    .onAppear {
+      // Show splash for 2 seconds, then start initialization
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        withAnimation(.easeInOut(duration: 0.5)) {
+          showingSplash = false
+        }
+        
+        // Start app initialization after splash
+        initializeApp()
+      }
+    }
+  }
+  
+  private var mainAppContent: some View {
     ZStack {
       // Main container ZStack
       // AR View in the background
@@ -310,17 +343,10 @@ public struct ContentView: View {
       
     }
     .onChange(of: selectedObject) { oldValue, newValue in
-      // Clear locations when object type changes to none.
-      // This might need adjustment based on how objectType is used with hunt types
-      if newValue == .none {
-        objectLocations = []  // Only clear geolocation locations here?
-        // proximityMarkers = [] // Should proximity markers be cleared? Probably not by objectType change.
-        print(
-          "ContentView onChange selectedObject: \(newValue.rawValue) - Object type set to None, clearing geolocation locations."
-        )
-      } else {
-        print("ContentView onChange selectedObject: \(newValue.rawValue)")
-      }
+      handleSelectedObjectChange(oldValue, newValue)
+    }
+    .onChange(of: showingNamePrompt) { oldValue, newValue in
+      print("🔥 DEBUG: showingNamePrompt changed from \(oldValue) to \(newValue)")
     }
     .onReceive(locationManager.$currentLocation) { location in
       currentLocation = location
@@ -333,42 +359,101 @@ public struct ContentView: View {
       print(
         "ContentView onReceive: Updated heading: \(String(describing: newHeading?.trueHeading))")
     }
-    .onAppear {
-      print("ContentView onAppear: Requesting authorization and starting updates.")
-      locationManager.requestAuthorization()
-      locationManager.startUpdating()
-      print(
-        "ContentView onAppear: objectLocations.count = \(objectLocations.count), proximityMarkers.count = \(proximityMarkers.count), selectedObject = \(selectedObject.rawValue), currentHuntType = \(String(describing: currentHuntType))"
-      )
-      if huntDataManager.shouldPromptForName {
-        showingNamePrompt = true
-      }
-    }
-    .alert("Enter Your Name", isPresented: $showingNamePrompt, actions: {
-      TextField("Name", text: $userName)
+    .alert("Welcome to Loota!", isPresented: $showingNamePrompt) {
+      TextField("Enter your name", text: $userName)
       Button("OK") {
-        huntDataManager.setUserName(userName)
-        showingNamePrompt = false
-        // Join hunt after setting name
-        if let huntData = huntDataManager.huntData {
-          huntDataManager.joinHunt(huntId: huntData.id)
-        }
+        print("🔥 DEBUG: OK button tapped in alert!")
+        submitName()
       }
-    }, message: {
-      Text("Please enter your name to participate in the hunt.")
-    })
+      Button("Use Anonymous", role: .cancel) {
+        print("🔥 DEBUG: Anonymous button tapped in alert!")
+        cancelNamePrompt()
+      }
+    } message: {
+      Text("Please enter your name to participate in the hunt, or choose Anonymous.")
+    }
     .onReceive(huntDataManager.$huntData) { huntData in
       if let huntData = huntData {
-        // Check if user name prompt is needed when hunt data is received
+        print("🔥 DEBUG: Hunt data received, checking if name prompt needed")
+        
+        // Load the hunt data first
+        loadHuntData(huntData)
+        
+        // Only show name prompt if we need to prompt AND we haven't shown it yet for this hunt
         if huntDataManager.shouldPromptForName {
+          print("🔥 DEBUG: Name prompt needed, showing modal")
           showingNamePrompt = true
         } else {
+          print("🔥 DEBUG: User already has name, joining hunt directly")
           // User already has a name, proceed with joining hunt
           huntDataManager.joinHunt(huntId: huntData.id)
         }
-        loadHuntData(huntData)
-        
       }
+    }
+  }
+  
+  private func initializeApp() {
+    print("ContentView initializeApp: Starting app initialization.")
+    locationManager.requestAuthorization()
+    locationManager.startUpdating()
+    
+    print(
+      "ContentView initializeApp: objectLocations.count = \(objectLocations.count), proximityMarkers.count = \(proximityMarkers.count), selectedObject = \(selectedObject.rawValue), currentHuntType = \(String(describing: currentHuntType))"
+    )
+    
+    // Don't show name prompt immediately - wait for hunt data and actual join attempt
+    // Finish initialization after a short delay to allow location services to start
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+      withAnimation(.easeInOut(duration: 0.5)) {
+        isInitializing = false
+      }
+    }
+  }
+  
+  private func submitName() {
+    print("🔥 DEBUG: submitName() called!")
+    print("🔥 DEBUG: userName value: '\(userName)'")
+    let finalName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let nameToUse = finalName.isEmpty ? "Anonymous" : finalName
+    print("🔥 DEBUG: Using name: '\(nameToUse)'")
+    
+    huntDataManager.setUserName(nameToUse)
+    print("🔥 DEBUG: Set user name, dismissing modal")
+    
+    // Join hunt after setting name
+    if let huntData = huntDataManager.huntData {
+      print("🔥 DEBUG: Hunt data exists, joining hunt: \(huntData.id)")
+      huntDataManager.joinHunt(huntId: huntData.id)
+    } else {
+      print("🔥 DEBUG: No hunt data available")
+    }
+  }
+  
+  private func cancelNamePrompt() {
+    print("🔥 DEBUG: cancelNamePrompt() called!")
+    
+    // Use "Anonymous" if user cancels
+    huntDataManager.setUserName("Anonymous")
+    print("🔥 DEBUG: Set name to Anonymous, dismissing modal")
+    
+    // Still try to join hunt with Anonymous name
+    if let huntData = huntDataManager.huntData {
+      print("🔥 DEBUG: Hunt data exists, joining hunt with Anonymous")
+      huntDataManager.joinHunt(huntId: huntData.id)
+    }
+  }
+  
+  private func handleSelectedObjectChange(_ oldValue: ARObjectType, _ newValue: ARObjectType) {
+    // Clear locations when object type changes to none.
+    // This might need adjustment based on how objectType is used with hunt types
+    if newValue == .none {
+      objectLocations = []  // Only clear geolocation locations here?
+      // proximityMarkers = [] // Should proximity markers be cleared? Probably not by objectType change.
+      print(
+        "ContentView onChange selectedObject: \(newValue.rawValue) - Object type set to None, clearing geolocation locations."
+      )
+    } else {
+      print("ContentView onChange selectedObject: \(newValue.rawValue)")
     }
   }
 
