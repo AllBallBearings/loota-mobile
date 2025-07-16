@@ -14,6 +14,7 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 - Build and run with Xcode (⌘+R)
 - Command line build: `cd loota && xcodebuild -project loota.xcodeproj -scheme loota -configuration Debug build`
 - Run tests with Xcode (⌘+U)
+- Command line test: `cd loota && xcodebuild test -project loota.xcodeproj -scheme loota -destination 'platform=iOS Simulator,name=iPhone 15'`
 
 ### Testing
 
@@ -136,9 +137,10 @@ The app handles deep links from the web platform to launch directly into specifi
 
 ## Network Architecture
 
-**Environment Management**: `Environment.swift` manages API endpoints:
+**Environment Management**: `Environment.swift` manages API endpoints and API key:
 - Production: `https://www.loota.fun`  
-- Staging: `https://staging.loota.fun`
+- Staging: `https://staging.loota.fun` (used in DEBUG builds)
+- API key is currently hardcoded but should be moved to secure storage
 
 **Key API Endpoints**:
 - `GET /api/hunts/{huntId}` - Fetch hunt data
@@ -180,8 +182,20 @@ Dollar sign model: `3D Resources/DollarSign.usdz`
 - Proper anchor cleanup when objects collected
 - Audio player reuse for coin collection sounds
 
+## Permissions & Privacy
+
+The app requires these iOS permissions (defined in Info.plist):
+- **Camera**: "This app uses the camera for augmented reality treasure hunting experiences."
+- **Location When In Use**: "This app uses location services to place virtual treasures at real-world locations."
+
 ## Current Status
 
 **Stability**: Main branch stable and ready for new development. All major features implemented including hand gesture summoning, pin ordering system, and user management flow.
 
 **Pending Dependencies**: Backend PUT endpoint for user name updates.
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
