@@ -24,28 +24,65 @@ public struct ContentView: View {
   @State private var userName = ""
   @State private var isInitializing = true
   @State private var showingSplash = true
+  @State private var showingHamburgerMenu = false
+  @State private var showingSurveyMode = false
+  @State private var navigationPath = NavigationPath()
 
   public init() {
     print("DEBUG: ContentView - init() called.")
   }
 
   public var body: some View {
-    ZStack {
-      // Show splash screen first
-      if showingSplash {
-        SplashScreen()
-          .transition(.opacity)
-      }
-      // Main app content (always present after splash)
-      else {
-        mainAppContent
-          .disabled(isInitializing) // Disable interaction during loading
-        
-        // Loading indicator overlay
-        if isInitializing {
-          LoadingIndicator(message: "Initializing Hunt...", showProgress: true)
+    NavigationStack(path: $navigationPath) {
+      ZStack {
+        // Show splash screen first
+        if showingSplash {
+          SplashScreen()
             .transition(.opacity)
         }
+        // Main app content (always present after splash)
+        else {
+          mainAppContent
+            .disabled(isInitializing) // Disable interaction during loading
+          
+          // Loading indicator overlay
+          if isInitializing {
+            LoadingIndicator(message: "Initializing Hunt...", showProgress: true)
+              .transition(.opacity)
+          }
+        }
+        
+        // Hamburger menu overlay
+        if showingHamburgerMenu {
+          Color.black.opacity(0.3)
+            .edgesIgnoringSafeArea(.all)
+            .onTapGesture {
+              withAnimation(.easeInOut(duration: 0.3)) {
+                showingHamburgerMenu = false
+              }
+            }
+          
+          HStack {
+            HamburgerMenu(
+              isShowingMenu: $showingHamburgerMenu,
+              isShowingSurveyMode: $showingSurveyMode
+            )
+            .transition(.move(edge: .leading))
+            
+            Spacer()
+          }
+        }
+      }
+      .navigationDestination(isPresented: $showingSurveyMode) {
+        SurveyQuestView()
+          .onAppear {
+            // Pause location updates when entering survey mode
+            locationManager.stopUpdatingHeading()
+          }
+          .onDisappear {
+            // Resume location updates when returning to AR mode
+            locationManager.startUpdatingHeading()
+          }
       }
     }
     .onAppear {
@@ -167,26 +204,36 @@ public struct ContentView: View {
       // UI Overlay VStack
       VStack {
         HStack(alignment: .top) {  // Top Row: Counter and Object Type Display
-          // Animated counter in top left
-          ZStack {
-            Text("\(coinsCollected)")
-              .font(.system(size: 36, weight: .heavy, design: .rounded))
-              .foregroundColor(.yellow)
-              .padding(.horizontal, 20)
-              .padding(.vertical, 10)
-              .background(
-                LinearGradient(
-                  gradient: Gradient(colors: [Color.yellow.opacity(0.9), Color.orange.opacity(0.7)]
-                  ),
-                  startPoint: .topLeading,
-                  endPoint: .bottomTrailing
+          // Hamburger menu button and animated counter in top left
+          VStack(alignment: .leading, spacing: 12) {
+            // Hamburger menu button
+            HamburgerMenuButton {
+              withAnimation(.easeInOut(duration: 0.3)) {
+                showingHamburgerMenu = true
+              }
+            }
+            
+            // Animated counter
+            ZStack {
+              Text("\(coinsCollected)")
+                .font(.system(size: 36, weight: .heavy, design: .rounded))
+                .foregroundColor(.yellow)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                  LinearGradient(
+                    gradient: Gradient(colors: [Color.yellow.opacity(0.9), Color.orange.opacity(0.7)]
+                    ),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                  )
                 )
-              )
-              .cornerRadius(16)
-              .shadow(color: .yellow.opacity(0.7), radius: animate ? 16 : 4)
-              .scaleEffect(animate ? 1.4 : 1.0)
-              .opacity(animate ? 1.0 : 0.85)
-              .animation(.spring(response: 0.4, dampingFraction: 0.5), value: animate)
+                .cornerRadius(16)
+                .shadow(color: .yellow.opacity(0.7), radius: animate ? 16 : 4)
+                .scaleEffect(animate ? 1.4 : 1.0)
+                .opacity(animate ? 1.0 : 0.85)
+                .animation(.spring(response: 0.4, dampingFraction: 0.5), value: animate)
+            }
           }
           .padding([.top, .leading], 16)
 

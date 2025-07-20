@@ -2,6 +2,7 @@ import CoreLocation
 
 class LocationManager: NSObject, ObservableObject {
     @Published var currentLocation: CLLocationCoordinate2D?
+    @Published var currentCLLocation: CLLocation?
     @Published var heading: CLHeading? {
         didSet {
             print("🧭 Heading updated: \(heading?.trueHeading ?? -1), Accuracy: \(heading?.headingAccuracy ?? -1)")
@@ -46,13 +47,22 @@ class LocationManager: NSObject, ObservableObject {
                 locationManager.startUpdatingHeading()
             }
         }
+        
+        func stopUpdatingHeading() {
+            locationManager.stopUpdatingHeading()
+        }
+        
+        func startUpdatingHeading() {
+            locationManager.startUpdatingHeading()
+        }
 }
 
 extension LocationManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         currentLocation = location.coordinate
-        print("📍 Updated location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        currentCLLocation = location
+        print("📍 Updated location: \(location.coordinate.latitude), \(location.coordinate.longitude), altitude: \(location.altitude)m")
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

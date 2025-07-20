@@ -134,6 +134,10 @@ The app handles deep links from the web platform to launch directly into specifi
 - `AppDelegate.swift`: App lifecycle and deep link handling
 - `SplashScreen.swift`: Animated startup screen with Loota branding
 - `LoadingIndicator.swift`: Progress overlay for hunt initialization
+- `SurveyManager.swift`: Survey data collection and GPS tracking
+- `SurveyQuestView.swift`: Survey interface and controls
+- `PathVisualizationView.swift`: 3D survey path visualization
+- `HamburgerMenu.swift`: Navigation menu system
 
 ## Network Architecture
 
@@ -187,10 +191,55 @@ Dollar sign model: `3D Resources/DollarSign.usdz`
 The app requires these iOS permissions (defined in Info.plist):
 - **Camera**: "This app uses the camera for augmented reality treasure hunting experiences."
 - **Location When In Use**: "This app uses location services to place virtual treasures at real-world locations."
+- **Motion & Fitness**: Required for CoreMotion's CMAltimeter barometric pressure data in Survey Quest feature
+
+### Survey Quest Feature
+
+**New Feature**: Land surveying functionality with GPS tracking and elevation monitoring
+
+**SurveyManager.swift**: Core surveying logic and data collection
+
+- Manages GPS data collection with configurable sampling intervals (time-based: 1 second, distance-based: 1 foot, 3 feet, 10 feet, high precision)
+- Integrates CoreMotion's CMAltimeter for accurate barometric elevation tracking
+- Exports data in CSV and JSON formats with comprehensive metrics
+- Tracks cumulative distance, elevation changes, and timing information
+- Supports pause/resume functionality and data persistence
+
+**SurveyQuestView.swift**: SwiftUI interface for survey operations
+
+- Real-time survey status display with live statistics
+- Export functionality with file management and sharing
+- Interactive data point list with auto-scrolling
+- 3D path visualization integration
+- Sampling interval configuration UI
+
+**PathVisualizationView.swift**: 3D visualization using SceneKit
+
+- Converts GPS coordinates to 3D ribbon path visualization
+- Color-coded progress indication along the survey path
+- Interactive 3D scene with camera controls (pinch, drag, pan)
+- Start/end markers and elevation-aware path rendering
+- Auto-framing camera positioning based on survey bounds
+
+**HamburgerMenu.swift**: Navigation menu system
+
+- Slide-out menu with animated transitions
+- Access to Survey Quest and future features
+- Consistent design language with the main app
+
+### Survey Quest Architecture
+
+1. **Data Collection**: Multi-source elevation data (GPS + barometric pressure) with intelligent fallback
+2. **Sampling Strategies**: Configurable time-based or distance-based data collection
+3. **Export System**: Structured data export with CSV/JSON formats and comprehensive metadata
+4. **3D Visualization**: Real-time SceneKit rendering of survey paths with interactive controls
+5. **State Management**: Observable pattern integration with SwiftUI for reactive updates
 
 ## Current Status
 
-**Stability**: Main branch stable and ready for new development. All major features implemented including hand gesture summoning, pin ordering system, and user management flow.
+**Stability**: Main branch stable with Survey Quest feature fully implemented. Core AR treasure hunting and land surveying features complete.
+
+**Recent Additions**: Survey Quest feature with GPS tracking, elevation monitoring, 3D visualization, and data export capabilities.
 
 **Pending Dependencies**: Backend PUT endpoint for user name updates.
 
