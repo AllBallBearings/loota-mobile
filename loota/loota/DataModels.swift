@@ -82,12 +82,18 @@ public struct PinData: Codable {
 
 public struct HuntData: Codable {
   public let id: String
+  public let title: String?
+  public let description: String?
   public let type: HuntType
   public let winnerId: String?
   public let createdAt: String?
   public let updatedAt: String?
   public let creatorId: String?
   public var pins: [PinData]
+  public let isCompleted: Bool?
+  public let completedAt: String?
+  public let winnerContact: WinnerContact?
+  public let creatorContact: CreatorContact?
 }
 
 // MARK: - User and Hunt Interaction Models
@@ -107,15 +113,18 @@ public struct UserRegistrationResponse: Codable {
 public struct UserResponse: Codable {
   public let userId: String
   public let name: String
+  public let phone: String?
   
   private enum CodingKeys: String, CodingKey {
     case userId = "id"
     case name
+    case phone
   }
 }
 
 public struct JoinHuntRequest: Codable {
   let userId: String
+  let participantPhone: String
 }
 
 public struct JoinHuntResponse: Codable {
@@ -131,6 +140,48 @@ public struct CollectPinRequest: Codable {
 public struct CollectPinResponse: Codable {
   let message: String
   let pinId: String
+}
+
+// MARK: - Hunt Completion and Contact Models
+
+public struct WinnerContact: Codable {
+  public let name: String?
+  public let phone: String?
+}
+
+public struct CreatorContact: Codable {
+  public let name: String?
+  public let preferred: String?
+  public let phone: String?
+  public let email: String?
+}
+
+// MARK: - Error Handling
+
+public enum HuntError: Error, LocalizedError {
+  case phoneNumberRequired
+  case huntNotFound
+  case alreadyParticipating
+  case huntCompleted
+  case networkError
+  case invalidPhoneNumber
+  
+  public var errorDescription: String? {
+    switch self {
+    case .phoneNumberRequired:
+      return "Phone number is required to join hunts for prize contact"
+    case .huntNotFound:
+      return "Hunt not found"
+    case .alreadyParticipating:
+      return "You're already participating in this hunt"
+    case .huntCompleted:
+      return "This hunt has already been completed"
+    case .networkError:
+      return "Network error occurred"
+    case .invalidPhoneNumber:
+      return "Please enter a valid phone number"
+    }
+  }
 }
 
 // MARK: - AR and View-Related Data Models

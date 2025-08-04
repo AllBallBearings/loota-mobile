@@ -1322,8 +1322,15 @@ public struct ARViewContainer: UIViewRepresentable {
         if frameCounter % 180 == 0 {
           print("🤲 HAND_TRACKING: Processing frame #\(frameCounter) (isHandVisible: \(isHandVisible), isSummoning: \(isSummoning))")
         }
-        processHandPoseInFrame(frame)
+        
+        // Process the frame on a background queue to avoid retaining frames on main thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+          self?.processHandPoseInFrame(frame)
+        }
       }
+      
+      // Important: Don't retain the frame beyond this method
+      // The frame parameter will be automatically released when this method returns
     }
 
     private func processHandPoseInFrame(_ frame: ARFrame) {
@@ -1332,16 +1339,21 @@ public struct ARViewContainer: UIViewRepresentable {
         return
       }
 
+      // Extract the pixel buffer immediately to avoid retaining the entire frame
       let pixelBuffer = frame.capturedImage
+      
+      // Create the image request handler with just the pixel buffer
       let imageRequestHandler = VNImageRequestHandler(
         cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
 
       do {
         try imageRequestHandler.perform([handPoseRequest])
-        print("🤲 HAND_TRACKING: Vision request performed successfully")
+        // Removed debug print to reduce console spam
       } catch {
         print("🚨 HAND_TRACKING: Failed to perform hand pose detection: \(error)")
       }
+      
+      // The frame and pixelBuffer will be automatically released when this method returns
     }
 
     // Helper function to parse direction string (e.g., "N32E") into radians

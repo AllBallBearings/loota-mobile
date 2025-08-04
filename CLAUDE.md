@@ -18,6 +18,13 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 
 ### Testing
 
+## Testing Requirements
+
+- **Write tests for all new features** unless explicitly told not to
+- **Run tests before committing** to ensure code quality and functionality
+- Use `npm run test` to verify all tests pass before making commits
+- Tests should cover both happy path and edge cases for new functionality
+
 - Unit tests: `lootaTests/lootaTests.swift`
 - UI tests: `lootaUITests/lootaUITests.swift` and `lootaUITests/lootaUITestsLaunchTests.swift`
 
@@ -26,6 +33,12 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 ### Code Commits
 
 - Don't co-author with Claude or Claude-Code
+- Before committing any changes, ensure:
+
+1. All tests pass (`npm run test`)
+2. Code passes type checking (`npm run type-check`)
+3. Code passes linting (`npm run lint`)
+4. New features have corresponding tests written
 
 ### Core Components
 
@@ -88,7 +101,7 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 The app integrates Vision framework for hand pose detection to enable "spell casting" object summoning:
 
 1. **Detection**: Uses `VNDetectHumanHandPoseRequest` to detect wrist landmarks with >60% confidence
-2. **Performance**: Processes every 6th frame (~10 FPS) to maintain AR performance  
+2. **Performance**: Processes every 6th frame (~10 FPS) to maintain AR performance
 3. **Proximity**: Objects within 10 feet (3.048m) are eligible for summoning
 4. **Animation**: 10-second staged animation (8s slow approach + 2s fast collection) with magical floating effects
 5. **Collection**: Enhanced collection system with larger threshold (0.8m) for summoned objects
@@ -105,6 +118,7 @@ The app integrates Vision framework for hand pose detection to enable "spell cas
 ### User Management Flow
 
 **Registration & State**: Uses device UUID for identification with sophisticated name management:
+
 - **Detection**: `shouldPromptForName` determines when to show name prompt vs. rejoin existing user
 - **Sync**: Compares local `@AppStorage` names with database for consistency
 - **Name Prompt**: Alert dialog with OK/Cancel options, defaults to "Anonymous" for empty/cancelled input
@@ -113,10 +127,34 @@ The app integrates Vision framework for hand pose detection to enable "spell cas
 ### App Startup Flow
 
 **Multi-stage Initialization**: Polished startup experience with visual feedback:
+
 1. **Splash Screen**: 2-second animated "Loota" branding with purple gradient and glow effects
-2. **Loading Overlay**: Progress indicator during location services and hunt data initialization  
+2. **Loading Overlay**: Progress indicator during location services and hunt data initialization
 3. **Name Prompt**: User registration dialog if needed (can be dismissed with Cancel)
 4. **Main Content**: Transitions to AR experience when ready
+
+### Hunt Completion & Winner Contact System
+
+**Hunt Completion Detection**: Automatic polling system that detects when hunts are completed
+
+- **Polling Logic**: Every 10 seconds after joining, checks hunt completion status
+- **Completion Trigger**: When `isCompleted` changes from false to true
+- **Winner Detection**: Compares `winnerId` with current user ID
+- **Contact Information**: Shows creator contact details for winners
+
+**Phone Number Requirement**: All participants must provide phone number for prize transfers
+
+- **Collection Point**: Required during hunt joining process
+- **Validation**: Client-side phone number format validation
+- **Purpose**: Apple Pay prize transfers and winner contact
+- **User Flow**: Name prompt → Phone prompt → Hunt participation
+
+**"Totally Looted!" Completion Screen**: Celebration screen with contact actions
+
+- **Winner View**: Shows creator contact information with call/text/email buttons
+- **Non-Winner View**: Shows completion message and winner information
+- **Contact Actions**: Direct integration with iOS dialer, messages, and mail apps
+- **Dismissal**: Returns to hunt list or main app flow
 
 ### Deep Linking
 
@@ -134,18 +172,22 @@ The app handles deep links from the web platform to launch directly into specifi
 - `AppDelegate.swift`: App lifecycle and deep link handling
 - `SplashScreen.swift`: Animated startup screen with Loota branding
 - `LoadingIndicator.swift`: Progress overlay for hunt initialization
+- `HuntCompletionView.swift`: Hunt completion and winner contact screens
 
 ## Network Architecture
 
 **Environment Management**: `Environment.swift` manages API endpoints and API key:
-- Production: `https://www.loota.fun`  
+
+- Production: `https://www.loota.fun`
 - Staging: `https://staging.loota.fun` (used in DEBUG builds)
 - API key is currently hardcoded but should be moved to secure storage
 
 **Key API Endpoints**:
+
 - `GET /api/hunts/{huntId}` - Fetch hunt data
+- `GET /api/hunts/{huntId}?userId={userId}` - Fetch hunt with user context (completion status, contact info)
 - `POST /api/users/register` - User registration with device UUID
-- `POST /api/hunts/{huntId}/participants` - Join hunt
+- `POST /api/hunts/{huntId}/participants` - Join hunt (requires phone number)
 - `POST /api/hunts/{huntId}/pins/{pinId}/collect` - Collect specific pin
 - `GET /api/users/{userId}` - Get user info
 - `PUT /api/users/{userId}` - Update user name (backend pending implementation)
@@ -173,11 +215,13 @@ Dollar sign model: `3D Resources/DollarSign.usdz`
 ## Performance Considerations
 
 **AR Optimizations**:
-- CADisplayLink for smooth entity rotation animations  
+
+- CADisplayLink for smooth entity rotation animations
 - SIMD distance calculations for efficient proximity checking
 - Frame-rate limited hand detection (every 6th frame)
 
 **Memory Management**:
+
 - Weak references in AR delegate closures
 - Proper anchor cleanup when objects collected
 - Audio player reuse for coin collection sounds
@@ -185,6 +229,7 @@ Dollar sign model: `3D Resources/DollarSign.usdz`
 ## Permissions & Privacy
 
 The app requires these iOS permissions (defined in Info.plist):
+
 - **Camera**: "This app uses the camera for augmented reality treasure hunting experiences."
 - **Location When In Use**: "This app uses location services to place virtual treasures at real-world locations."
 
@@ -195,7 +240,8 @@ The app requires these iOS permissions (defined in Info.plist):
 **Pending Dependencies**: Backend PUT endpoint for user name updates.
 
 # important-instruction-reminders
+
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.

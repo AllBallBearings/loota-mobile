@@ -89,6 +89,64 @@ public class APIService {
         return
       }
 
+      print("🌐 APIService - fetchHunt: Response data received, size: \(data.count) bytes")
+      if let responseString = String(data: data, encoding: .utf8) {
+        print("🌐 APIService - fetchHunt: Raw response: \(responseString)")
+      }
+
+      do {
+        let decoder = JSONDecoder()
+        let huntData = try decoder.decode(HuntData.self, from: data)
+        print("🌐 APIService - fetchHunt: Successfully decoded HuntData")
+        print("🌐 APIService - fetchHunt: Hunt ID: \(huntData.id)")
+        print("🌐 APIService - fetchHunt: Hunt Title: '\(huntData.title ?? "nil")'")
+        print("🌐 APIService - fetchHunt: Hunt Description: '\(huntData.description ?? "nil")'")
+        print("🌐 APIService - fetchHunt: Hunt Type: \(huntData.type)")
+        print("🌐 APIService - fetchHunt: Pins count: \(huntData.pins.count)")
+        completion(.success(huntData))
+      } catch {
+        print("🌐 APIService - fetchHunt: ❌ DECODE ERROR: \(error)")
+        completion(.failure(.decodingError(error)))
+      }
+    }.resume()
+  }
+
+  public func fetchHuntWithUserContext(
+    huntId: String, userId: String, completion: @escaping (Result<HuntData, APIError>) -> Void
+  ) {
+    let urlString = "\(baseURL)/api/hunts/\(huntId)?userId=\(userId)"
+    guard let url = URL(string: urlString) else {
+      completion(.failure(.invalidURL))
+      return
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
+
+    session.dataTask(with: request) { data, response, error in
+      if let error = error {
+        completion(.failure(.networkError(error)))
+        return
+      }
+
+      guard let httpResponse = response as? HTTPURLResponse else {
+        completion(.failure(.unknownError))
+        return
+      }
+
+      guard (200...299).contains(httpResponse.statusCode) else {
+        let message = data.flatMap { String(data: $0, encoding: .utf8) }
+        completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
+        return
+      }
+
+      guard let data = data else {
+        completion(.failure(.unknownError))
+        return
+      }
+
       do {
         let decoder = JSONDecoder()
         let huntData = try decoder.decode(HuntData.self, from: data)
@@ -157,7 +215,7 @@ public class APIService {
   }
 
   public func joinHunt(
-    huntId: String, userId: String,
+    huntId: String, userId: String, phoneNumber: String,
     completion: @escaping (Result<JoinHuntResponse, APIError>) -> Void
   ) {
     let urlString = "\(baseURL)/api/hunts/\(huntId)/participants"
@@ -171,7 +229,7 @@ public class APIService {
     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
     request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
 
-    let body = JoinHuntRequest(userId: userId)
+    let body = JoinHuntRequest(userId: userId, participantPhone: phoneNumber)
     do {
       request.httpBody = try JSONEncoder().encode(body)
     } catch {
@@ -191,7 +249,15 @@ public class APIService {
         return
       }
 
-      // Handle 409 status code specially for rejoining hunts
+      // Handle special status codes
+      if httpResponse.statusCode == 400 {
+        if let data = data, let responseString = String(data: data, encoding: .utf8),
+           responseString.contains("phone") || responseString.contains("Phone") {
+          completion(.failure(.serverError(statusCode: 400, message: "Phone number is required to join hunts")))
+          return
+        }
+      }
+      
       if httpResponse.statusCode == 409 {
         if let data = data, let responseString = String(data: data, encoding: .utf8), responseString.contains("User is already participating in this hunt") {
             let syntheticResponse = JoinHuntResponse(message: "User is already participating in this hunt.", participationId: "", isRejoining: true)
@@ -225,7 +291,10 @@ public class APIService {
     completion: @escaping (Result<CollectPinResponse, APIError>) -> Void
   ) {
     let urlString = "\(baseURL)/api/hunts/\(huntId)/pins/\(pinId)/collect"
+    print("🌐 APIService - collectPin: Constructing URL: \(urlString)")
+    
     guard let url = URL(string: urlString) else {
+      print("🌐 APIService - collectPin: ❌ INVALID URL: \(urlString)")
       completion(.failure(.invalidURL))
       return
     }
@@ -234,42 +303,77 @@ public class APIService {
     request.httpMethod = "POST"
     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
     request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
+    
+    print("🌐 APIService - collectPin: Request headers set")
+    print("🌐   - Method: POST")
+    print("🌐   - Content-Type: application/json") 
+    print("🌐   - X-API-Key: \(Environment.current.apiKey.prefix(10))...")
 
     let body = CollectPinRequest(collectedByUserId: userId)
+    print("🌐 APIService - collectPin: Request body created with userId: \(userId)")
+    
     do {
       request.httpBody = try JSONEncoder().encode(body)
+      if let bodyData = request.httpBody, let bodyString = String(data: bodyData, encoding: .utf8) {
+        print("🌐 APIService - collectPin: Request body JSON: \(bodyString)")
+      }
     } catch {
+      print("🌐 APIService - collectPin: ❌ FAILED to encode request body: \(error)")
       completion(.failure(.decodingError(error)))
       return
     }
 
+    print("🌐 APIService - collectPin: Starting network request...")
+    print("🌐 APIService - collectPin: Request timestamp: \(Date())")
 
     session.dataTask(with: request) { data, response, error in
+      print("🌐 APIService - collectPin: Network request completed")
+      print("🌐 APIService - collectPin: Response timestamp: \(Date())")
+      
       if let error = error {
+        print("🌐 APIService - collectPin: ❌ NETWORK ERROR: \(error)")
+        print("🌐 APIService - collectPin: Error localizedDescription: \(error.localizedDescription)")
         completion(.failure(.networkError(error)))
         return
       }
 
       guard let httpResponse = response as? HTTPURLResponse else {
+        print("🌐 APIService - collectPin: ❌ NO HTTP RESPONSE")
         completion(.failure(.unknownError))
         return
       }
 
+      print("🌐 APIService - collectPin: HTTP Status Code: \(httpResponse.statusCode)")
+      print("🌐 APIService - collectPin: Response headers: \(httpResponse.allHeaderFields)")
+
       guard (200...299).contains(httpResponse.statusCode) else {
         let message = data.flatMap { String(data: $0, encoding: .utf8) }
+        print("🌐 APIService - collectPin: ❌ HTTP ERROR \(httpResponse.statusCode)")
+        print("🌐 APIService - collectPin: Error response body: \(message ?? "nil")")
         completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
         return
       }
 
       guard let data = data else {
+        print("🌐 APIService - collectPin: ❌ NO RESPONSE DATA")
         completion(.failure(.unknownError))
         return
       }
 
+      print("🌐 APIService - collectPin: Response data size: \(data.count) bytes")
+      if let responseString = String(data: data, encoding: .utf8) {
+        print("🌐 APIService - collectPin: Response body: \(responseString)")
+      }
+
       do {
         let collectPinResponse = try JSONDecoder().decode(CollectPinResponse.self, from: data)
+        print("🌐 APIService - collectPin: ✅ SUCCESS - Decoded response")
+        print("🌐 APIService - collectPin: Response pinId: \(collectPinResponse.pinId)")
+        print("🌐 APIService - collectPin: Response message: \(collectPinResponse.message)")
         completion(.success(collectPinResponse))
       } catch {
+        print("🌐 APIService - collectPin: ❌ DECODE ERROR: \(error)")
+        print("🌐 APIService - collectPin: Failed to decode response data")
         completion(.failure(.decodingError(error)))
       }
     }.resume()
@@ -299,6 +403,58 @@ public class APIService {
 
       guard let httpResponse = response as? HTTPURLResponse else {
         completion(.failure(.unknownError))
+        return
+      }
+
+      guard (200...299).contains(httpResponse.statusCode) else {
+        let message = data.flatMap { String(data: $0, encoding: .utf8) }
+        completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
+        return
+      }
+
+      guard let data = data else {
+        completion(.failure(.unknownError))
+        return
+      }
+
+      do {
+        let userResponse = try JSONDecoder().decode(UserResponse.self, from: data)
+        completion(.success(userResponse))
+      } catch {
+        completion(.failure(.decodingError(error)))
+      }
+    }.resume()
+  }
+
+  public func getUserByDeviceId(
+    deviceId: String,
+    completion: @escaping (Result<UserResponse, APIError>) -> Void
+  ) {
+    let urlString = "\(baseURL)/api/users/device/\(deviceId)"
+    guard let url = URL(string: urlString) else {
+      completion(.failure(.invalidURL))
+      return
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
+
+    session.dataTask(with: request) { data, response, error in
+      if let error = error {
+        completion(.failure(.networkError(error)))
+        return
+      }
+
+      guard let httpResponse = response as? HTTPURLResponse else {
+        completion(.failure(.unknownError))
+        return
+      }
+
+      // 404 is expected if user doesn't exist - not an error
+      if httpResponse.statusCode == 404 {
+        completion(.failure(.serverError(statusCode: 404, message: "User not found")))
         return
       }
 
