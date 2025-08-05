@@ -54,7 +54,7 @@ struct HuntJoinConfirmationView: View {
                         .font(.title.bold())
                         .foregroundColor(.white)
                     
-                    Text(huntData.title ?? "Treasure Hunt")
+                    Text(huntData.name ?? "Treasure Hunt")
                         .font(.title2)
                         .foregroundColor(.yellow)
                         .multilineTextAlignment(.center)
@@ -246,6 +246,11 @@ struct HuntJoinConfirmationView: View {
             .frame(maxWidth: 400)
         }
         .onAppear {
+            print("DEBUG: HuntJoinConfirmationView - onAppear: Hunt Name: '\(huntData.name ?? "nil")'")
+            print("DEBUG: HuntJoinConfirmationView - onAppear: Existing User Name: '\(existingUserName ?? "nil")'")
+            print("DEBUG: HuntJoinConfirmationView - onAppear: Existing User Phone: '\(existingUserPhone ?? "nil")'")
+            print("DEBUG: HuntJoinConfirmationView - onAppear: Existing User ID: '\(existingUserId ?? "nil")'")
+            
             // Pre-fill with existing data
             editingName = existingUserName ?? ""
             editingPhone = existingUserPhone ?? ""
@@ -253,6 +258,9 @@ struct HuntJoinConfirmationView: View {
             // Show fields that need to be filled
             showingNameField = (existingUserName == nil || existingUserName?.isEmpty == true || existingUserName == "Anonymous")
             showingPhoneField = (existingUserPhone == nil || existingUserPhone?.isEmpty == true)
+            
+            print("DEBUG: HuntJoinConfirmationView - onAppear: Will show name field: \(showingNameField)")
+            print("DEBUG: HuntJoinConfirmationView - onAppear: Will show phone field: \(showingPhoneField)")
         }
     }
     
@@ -317,7 +325,7 @@ struct HuntJoinConfirmationView: View {
     HuntJoinConfirmationView(
         huntData: HuntData(
             id: "test123",
-            title: "Downtown Adventure Hunt",
+            name: "Downtown Adventure Hunt",
             description: "Explore the heart of the city and discover hidden treasures around iconic landmarks!",
             type: .geolocation,
             winnerId: nil,
@@ -327,6 +335,9 @@ struct HuntJoinConfirmationView: View {
             pins: [PinData](),
             isCompleted: false,
             completedAt: nil,
+            participants: [],
+            creator: nil,
+            winner: nil,
             winnerContact: nil,
             creatorContact: nil
         ),

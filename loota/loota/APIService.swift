@@ -54,9 +54,12 @@ public class APIService {
   }
 
   public func fetchHunt(
-    withId huntId: String, completion: @escaping (Result<HuntData, APIError>) -> Void
+    withId huntId: String, userId: String? = nil, completion: @escaping (Result<HuntData, APIError>) -> Void
   ) {
-    let urlString = "\(baseURL)/api/hunts/\(huntId)"
+    var urlString = "\(baseURL)/api/hunts/\(huntId)"
+    if let userId = userId {
+      urlString += "?userId=\(userId)"
+    }
     guard let url = URL(string: urlString) else {
       completion(.failure(.invalidURL))
       return
@@ -99,7 +102,7 @@ public class APIService {
         let huntData = try decoder.decode(HuntData.self, from: data)
         print("🌐 APIService - fetchHunt: Successfully decoded HuntData")
         print("🌐 APIService - fetchHunt: Hunt ID: \(huntData.id)")
-        print("🌐 APIService - fetchHunt: Hunt Title: '\(huntData.title ?? "nil")'")
+        print("🌐 APIService - fetchHunt: Hunt Name: '\(huntData.name ?? "nil")'")
         print("🌐 APIService - fetchHunt: Hunt Description: '\(huntData.description ?? "nil")'")
         print("🌐 APIService - fetchHunt: Hunt Type: \(huntData.type)")
         print("🌐 APIService - fetchHunt: Pins count: \(huntData.pins.count)")
@@ -430,7 +433,7 @@ public class APIService {
     deviceId: String,
     completion: @escaping (Result<UserResponse, APIError>) -> Void
   ) {
-    let urlString = "\(baseURL)/api/users/device/\(deviceId)"
+    let urlString = "\(baseURL)/api/users?deviceId=\(deviceId)"
     guard let url = URL(string: urlString) else {
       completion(.failure(.invalidURL))
       return
@@ -452,12 +455,6 @@ public class APIService {
         return
       }
 
-      // 404 is expected if user doesn't exist - not an error
-      if httpResponse.statusCode == 404 {
-        completion(.failure(.serverError(statusCode: 404, message: "User not found")))
-        return
-      }
-
       guard (200...299).contains(httpResponse.statusCode) else {
         let message = data.flatMap { String(data: $0, encoding: .utf8) }
         completion(.failure(.serverError(statusCode: httpResponse.statusCode, message: message)))
@@ -470,19 +467,27 @@ public class APIService {
       }
 
       do {
-        let userResponse = try JSONDecoder().decode(UserResponse.self, from: data)
-        completion(.success(userResponse))
+        let usersListResponse = try JSONDecoder().decode(UsersListResponse.self, from: data)
+        if let user = usersListResponse.users.first {
+          completion(.success(user))
+        } else {
+          // No user found with this device ID
+          completion(.failure(.serverError(statusCode: 404, message: "User not found")))
+        }
       } catch {
         completion(.failure(.decodingError(error)))
       }
     }.resume()
   }
 
-  public func updateUserName(
-    userId: String, newName: String,
+  public func updateUser(
+    deviceId: String, 
+    name: String? = nil,
+    phone: String? = nil,
+    paypalId: String? = nil,
     completion: @escaping (Result<UserResponse, APIError>) -> Void
   ) {
-    let urlString = "\(baseURL)/api/users/\(userId)"
+    let urlString = "\(baseURL)/api/users"
     guard let url = URL(string: urlString) else {
       completion(.failure(.invalidURL))
       return
@@ -493,14 +498,13 @@ public class APIService {
     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
     request.addValue(Environment.current.apiKey, forHTTPHeaderField: "X-API-Key")
 
-    let body: [String: String] = ["name": newName]
+    let body = UserUpdateRequest(deviceId: deviceId, phone: phone, paypalId: paypalId, name: name)
     do {
-      request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+      request.httpBody = try JSONEncoder().encode(body)
     } catch {
       completion(.failure(.decodingError(error)))
       return
     }
-
 
     session.dataTask(with: request) { data, response, error in
       if let error = error {
@@ -525,8 +529,8 @@ public class APIService {
       }
 
       do {
-        let userResponse = try JSONDecoder().decode(UserResponse.self, from: data)
-        completion(.success(userResponse))
+        let updateResponse = try JSONDecoder().decode(UserUpdateResponse.self, from: data)
+        completion(.success(updateResponse.user))
       } catch {
         completion(.failure(.decodingError(error)))
       }

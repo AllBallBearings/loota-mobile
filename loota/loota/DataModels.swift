@@ -82,7 +82,7 @@ public struct PinData: Codable {
 
 public struct HuntData: Codable {
   public let id: String
-  public let title: String?
+  public let name: String?
   public let description: String?
   public let type: HuntType
   public let winnerId: String?
@@ -92,8 +92,25 @@ public struct HuntData: Codable {
   public var pins: [PinData]
   public let isCompleted: Bool?
   public let completedAt: String?
+  public let participants: [ParticipantData]
+  public let creator: UserInfo?
+  public let winner: UserInfo?
   public let winnerContact: WinnerContact?
   public let creatorContact: CreatorContact?
+}
+
+public struct ParticipantData: Codable {
+  public let id: String
+  public let userId: String
+  public let huntId: String
+  public let joinedAt: String
+  public let participantPhone: String?
+  public let user: UserInfo
+}
+
+public struct UserInfo: Codable {
+  public let id: String
+  public let name: String
 }
 
 // MARK: - User and Hunt Interaction Models
@@ -114,12 +131,33 @@ public struct UserResponse: Codable {
   public let userId: String
   public let name: String
   public let phone: String?
+  public let paypalId: String?
+  public let deviceId: String?
+  public let createdAt: String?
   
   private enum CodingKeys: String, CodingKey {
     case userId = "id"
     case name
     case phone
+    case paypalId
+    case deviceId
+    case createdAt
   }
+}
+
+public struct UsersListResponse: Codable {
+  public let users: [UserResponse]
+}
+
+public struct UserUpdateRequest: Codable {
+  let deviceId: String
+  let phone: String?
+  let paypalId: String?
+  let name: String?
+}
+
+public struct UserUpdateResponse: Codable {
+  public let user: UserResponse
 }
 
 public struct JoinHuntRequest: Codable {

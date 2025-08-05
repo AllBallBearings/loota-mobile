@@ -435,7 +435,7 @@ public struct ContentView: View {
       if let huntData = huntData {
         print("🔥 DEBUG: Hunt data received")
         print("🔥 DEBUG: Hunt ID: \(huntData.id)")
-        print("🔥 DEBUG: Hunt Title: '\(huntData.title ?? "nil")'")
+        print("🔥 DEBUG: Hunt Name: '\(huntData.name ?? "nil")'")
         print("🔥 DEBUG: Hunt Description: '\(huntData.description ?? "nil")'")
         print("🔥 DEBUG: userConfirmedHunt: \(userConfirmedHunt)")
         print("🔥 DEBUG: confirmedHuntId: \(confirmedHuntId ?? "nil")")
@@ -573,6 +573,13 @@ public struct ContentView: View {
       self.pinData = []
       
       for pin in huntData.pins {
+        // Skip pins that have already been collected
+        if pin.collectedByUserId != nil {
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: Skipping collected Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Collected by: \(pin.collectedByUserId ?? "unknown")")
+          continue
+        }
+        
         if let lat = pin.lat, let lng = pin.lng {
           let location = CLLocationCoordinate2D(latitude: lat, longitude: lng)
           self.objectLocations.append(location)
@@ -589,7 +596,8 @@ public struct ContentView: View {
       if !self.objectLocations.isEmpty && self.selectedObject == .none {
         self.selectedObject = .coin
       }
-      print("ContentView loadHuntData: Total AR objects created: \(self.objectLocations.count)")
+      let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), AR objects created: \(self.objectLocations.count)")
 
     case .proximity:
       print("ContentView loadHuntData: Processing \(huntData.pins.count) pins for proximity")
@@ -597,6 +605,13 @@ public struct ContentView: View {
       self.pinData = []
       
       for pin in huntData.pins {
+        // Skip pins that have already been collected
+        if pin.collectedByUserId != nil {
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: Skipping collected Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Collected by: \(pin.collectedByUserId ?? "unknown")")
+          continue
+        }
+        
         if let dist = pin.distanceFt, let dir = pin.directionStr {
           let marker = ProximityMarkerData(dist: dist * 0.3048, dir: dir)
           self.proximityMarkers.append(marker)
@@ -611,7 +626,8 @@ public struct ContentView: View {
       
       self.objectLocations = []
       self.selectedObject = .coin  // Default to coin for proximity
-      print("ContentView loadHuntData: Total proximity markers created: \(self.proximityMarkers.count)")
+      let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count)")
     }
     
     // Check if summoning hint should be shown after loading hunt data

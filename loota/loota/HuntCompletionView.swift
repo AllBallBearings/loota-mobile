@@ -308,7 +308,7 @@ struct JoinHuntView: View {
 #Preview {
     let sampleHunt = HuntData(
         id: "sample",
-        title: "Sample Hunt",
+        name: "Sample Hunt",
         description: "A sample treasure hunt for preview",
         type: .geolocation,
         winnerId: "user123",
@@ -318,6 +318,9 @@ struct JoinHuntView: View {
         pins: [],
         isCompleted: true,
         completedAt: "2024-01-01",
+        participants: [],
+        creator: nil,
+        winner: nil,
         winnerContact: WinnerContact(name: "John Doe", phone: "5551234567"),
         creatorContact: CreatorContact(name: "Jane Smith", preferred: "phone", phone: "5559876543", email: "jane@example.com")
     )
