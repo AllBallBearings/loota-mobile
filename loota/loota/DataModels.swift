@@ -82,12 +82,35 @@ public struct PinData: Codable {
 
 public struct HuntData: Codable {
   public let id: String
+  public let name: String?
+  public let description: String?
   public let type: HuntType
   public let winnerId: String?
   public let createdAt: String?
   public let updatedAt: String?
   public let creatorId: String?
   public var pins: [PinData]
+  public let isCompleted: Bool?
+  public let completedAt: String?
+  public let participants: [ParticipantData]
+  public let creator: UserInfo?
+  public let winner: UserInfo?
+  public let winnerContact: WinnerContact?
+  public let creatorContact: CreatorContact?
+}
+
+public struct ParticipantData: Codable {
+  public let id: String
+  public let userId: String
+  public let huntId: String
+  public let joinedAt: String
+  public let participantPhone: String?
+  public let user: UserInfo
+}
+
+public struct UserInfo: Codable {
+  public let id: String
+  public let name: String
 }
 
 // MARK: - User and Hunt Interaction Models
@@ -107,15 +130,39 @@ public struct UserRegistrationResponse: Codable {
 public struct UserResponse: Codable {
   public let userId: String
   public let name: String
+  public let phone: String?
+  public let paypalId: String?
+  public let deviceId: String?
+  public let createdAt: String?
   
   private enum CodingKeys: String, CodingKey {
     case userId = "id"
     case name
+    case phone
+    case paypalId
+    case deviceId
+    case createdAt
   }
+}
+
+public struct UsersListResponse: Codable {
+  public let users: [UserResponse]
+}
+
+public struct UserUpdateRequest: Codable {
+  let deviceId: String
+  let phone: String?
+  let paypalId: String?
+  let name: String?
+}
+
+public struct UserUpdateResponse: Codable {
+  public let user: UserResponse
 }
 
 public struct JoinHuntRequest: Codable {
   let userId: String
+  let participantPhone: String
 }
 
 public struct JoinHuntResponse: Codable {
@@ -131,6 +178,48 @@ public struct CollectPinRequest: Codable {
 public struct CollectPinResponse: Codable {
   let message: String
   let pinId: String
+}
+
+// MARK: - Hunt Completion and Contact Models
+
+public struct WinnerContact: Codable {
+  public let name: String?
+  public let phone: String?
+}
+
+public struct CreatorContact: Codable {
+  public let name: String?
+  public let preferred: String?
+  public let phone: String?
+  public let email: String?
+}
+
+// MARK: - Error Handling
+
+public enum HuntError: Error, LocalizedError {
+  case phoneNumberRequired
+  case huntNotFound
+  case alreadyParticipating
+  case huntCompleted
+  case networkError
+  case invalidPhoneNumber
+  
+  public var errorDescription: String? {
+    switch self {
+    case .phoneNumberRequired:
+      return "Phone number is required to join hunts for prize contact"
+    case .huntNotFound:
+      return "Hunt not found"
+    case .alreadyParticipating:
+      return "You're already participating in this hunt"
+    case .huntCompleted:
+      return "This hunt has already been completed"
+    case .networkError:
+      return "Network error occurred"
+    case .invalidPhoneNumber:
+      return "Please enter a valid phone number"
+    }
+  }
 }
 
 // MARK: - AR and View-Related Data Models

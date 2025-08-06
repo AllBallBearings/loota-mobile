@@ -10,16 +10,31 @@ public class HuntDataManager: ObservableObject {
   @Published public var huntData: HuntData?
   @Published public var errorMessage: String?
   @Published public var joinStatusMessage: String?
-  @AppStorage("userId") private var userId: String?
+  @Published public var showCompletionScreen: Bool = false
+  @AppStorage("userId") public var userId: String?
   @AppStorage("userName") public var userName: String?
+  @AppStorage("userPhone") public var userPhone: String?
   @AppStorage("collectedPinIDs") private var collectedPinIDsData: Data?
   @AppStorage("lastHuntId") private var lastHuntId: String?
 
   private var collectedPinIDs: Set<String> = []
   private var hasJoinedHunt: Bool = false
+  private var completionCheckTimer: Timer?
 
   private init() {
     loadCollectedPinIDs()
+    // Check for existing user on app launch
+    initializeUserData()
+  }
+  
+  private func initializeUserData() {
+    // Only check if we don't already have a userId
+    guard userId == nil else { return }
+    
+    checkForExistingUser {
+      // User data has been loaded if available
+      print("DEBUG: HuntDataManager - initializeUserData: User initialization complete")
+    }
   }
 
   private func loadCollectedPinIDs() {
@@ -65,9 +80,26 @@ public class HuntDataManager: ObservableObject {
     print("DEBUG: HuntDataManager - User name set to '\(name)', will register fresh user")
   }
   
+  public func setUserPhone(_ phone: String) {
+    print("DEBUG: HuntDataManager - setUserPhone called with phone: '\(phone)'")
+    print("DEBUG: HuntDataManager - Current userPhone: '\(self.userPhone ?? "nil")'")
+    print("DEBUG: HuntDataManager - Current userId: '\(self.userId ?? "nil")'")
+    
+    // If we have a userId but the backend doesn't support phone updates,
+    // we need to clear the user data and register fresh with the correct phone
+    if self.userId != nil {
+      print("DEBUG: HuntDataManager - Backend doesn't support phone updates, clearing user data to register fresh")
+      self.clearUserData()
+    }
+    
+    self.userPhone = phone
+    print("DEBUG: HuntDataManager - User phone set to '\(phone)', will register fresh user")
+  }
+  
   private func clearUserData() {
     print("DEBUG: HuntDataManager - Clearing existing user data")
     self.userId = nil
+    self.userPhone = nil
     // Don't clear userName here - we want to keep the new name for registration
   }
   
@@ -96,7 +128,13 @@ public class HuntDataManager: ObservableObject {
             if let validLocalName = normalizedLocalName {
               print("DEBUG: HuntDataManager - checkAndSyncUserName: Updating database with local name: '\(validLocalName)'")
               
-              APIService.shared.updateUserName(userId: userId, newName: validLocalName) { updateResult in
+              guard let deviceId = UIDevice.current.vendorId else {
+                print("DEBUG: HuntDataManager - checkAndSyncUserName: Device ID not available for update")
+                completion()
+                return
+              }
+              
+              APIService.shared.updateUser(deviceId: deviceId, name: validLocalName) { updateResult in
                 DispatchQueue.main.async {
                   switch updateResult {
                   case .success(_):
@@ -138,19 +176,23 @@ public class HuntDataManager: ObservableObject {
       return
     }
 
+    print("DEBUG: HuntDataManager - registerUserIfNeeded: Proceeding with user registration using device ID: \(deviceId)")
+    performUserRegistration(deviceId: deviceId, completion: completion)
+  }
+  
+  private func performUserRegistration(deviceId: String, completion: @escaping (Bool) -> Void) {
     let name = userName ?? "Anonymous"
-    print("DEBUG: HuntDataManager - registerUserIfNeeded: Registering user with name: '\(name)'")
+    print("DEBUG: HuntDataManager - performUserRegistration: Registering new user with name: '\(name)'")
 
-    APIService.shared.registerUser(name: name, phone: nil, payPalId: nil, deviceId: deviceId)
-    { result in
+    APIService.shared.registerUser(name: name, phone: nil, payPalId: nil, deviceId: deviceId) { result in
       DispatchQueue.main.async {
         switch result {
         case .success(let response):
-          print("DEBUG: HuntDataManager - registerUserIfNeeded: Successfully registered user with userId: \(response.userId)")
+          print("DEBUG: HuntDataManager - performUserRegistration: Successfully registered user with userId: \(response.userId)")
           self.userId = response.userId
           completion(true)
         case .failure(let error):
-          print("DEBUG: HuntDataManager - registerUserIfNeeded: Failed to register user: \(error.localizedDescription)")
+          print("DEBUG: HuntDataManager - performUserRegistration: Failed to register user: \(error.localizedDescription)")
           self.errorMessage = error.localizedDescription
           completion(false)
         }
@@ -169,12 +211,76 @@ public class HuntDataManager: ObservableObject {
         hasJoinedHunt = false // Reset join status for new hunt
     }
     
-    // Don't auto-register user when fetching hunt - let ContentView handle name prompt first
-    APIService.shared.fetchHunt(withId: huntId) { result in
+    // Check for existing user data if we don't have it yet
+    if userId == nil {
+      checkForExistingUser { [weak self] in
+        guard let self = self else { return }
+        self.proceedWithHuntFetch(huntId: huntId)
+      }
+    } else {
+      proceedWithHuntFetch(huntId: huntId)
+    }
+  }
+  
+  private func checkForExistingUser(completion: @escaping () -> Void) {
+    guard let deviceId = UIDevice.current.vendorId else {
+      print("DEBUG: HuntDataManager - checkForExistingUser: Device ID not available")
+      completion()
+      return
+    }
+
+    print("DEBUG: HuntDataManager - checkForExistingUser: Checking for existing user with device ID: \(deviceId)")
+    print("DEBUG: HuntDataManager - checkForExistingUser: Making API call to: \(Environment.current.baseURL)/api/users?deviceId=\(deviceId)")
+    
+    APIService.shared.getUserByDeviceId(deviceId: deviceId) { [weak self] result in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+        
+        switch result {
+        case .success(let userResponse):
+          print("DEBUG: HuntDataManager - checkForExistingUser: ✅ API SUCCESS - Found existing user!")
+          print("DEBUG: HuntDataManager - checkForExistingUser: User ID: \(userResponse.userId)")
+          print("DEBUG: HuntDataManager - checkForExistingUser: Name: '\(userResponse.name)'")
+          print("DEBUG: HuntDataManager - checkForExistingUser: Phone: '\(userResponse.phone ?? "nil")'")
+          print("DEBUG: HuntDataManager - checkForExistingUser: PayPal ID: '\(userResponse.paypalId ?? "nil")'")
+          print("DEBUG: HuntDataManager - checkForExistingUser: Device ID: '\(userResponse.deviceId ?? "nil")'")
+          
+          // Store the existing user data
+          self.userId = userResponse.userId
+          self.userName = userResponse.name
+          self.userPhone = userResponse.phone
+          
+          print("DEBUG: HuntDataManager - checkForExistingUser: ✅ User data cached locally")
+          print("DEBUG: HuntDataManager - checkForExistingUser: Final cached userId: '\(self.userId ?? "nil")'")
+          print("DEBUG: HuntDataManager - checkForExistingUser: Final cached userName: '\(self.userName ?? "nil")'")
+          print("DEBUG: HuntDataManager - checkForExistingUser: Final cached userPhone: '\(self.userPhone ?? "nil")'")
+          
+        case .failure(let error):
+          if case .serverError(let statusCode, let message) = error, statusCode == 404 {
+            print("DEBUG: HuntDataManager - checkForExistingUser: ℹ️ API returned 404 - No existing user found (this is normal for new users)")
+            print("DEBUG: HuntDataManager - checkForExistingUser: 404 message: \(message ?? "nil")")
+          } else {
+            print("DEBUG: HuntDataManager - checkForExistingUser: ❌ API ERROR - \(error)")
+            print("DEBUG: HuntDataManager - checkForExistingUser: Error description: \(error.localizedDescription)")
+          }
+        }
+        
+        print("DEBUG: HuntDataManager - checkForExistingUser: Final state - userId: \(self.userId ?? "nil"), userName: '\(self.userName ?? "nil")', userPhone: '\(self.userPhone ?? "nil")'")
+        completion()
+      }
+    }
+  }
+  
+  private func proceedWithHuntFetch(huntId: String) {
+    APIService.shared.fetchHunt(withId: huntId, userId: self.userId) { result in
       DispatchQueue.main.async {
         switch result {
         case .success(var data):
-          print("DEBUG: HuntDataManager - fetchHunt: Received hunt data with \(data.pins.count) pins")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: Received hunt data with \(data.pins.count) pins")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt ID: '\(data.id)'")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt Name: '\(data.name ?? "nil")'")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt Description: '\(data.description ?? "nil")'")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt Type: '\(data.type.rawValue)'")
           
           // Sort pins by order field to ensure consistent numbering
           data.pins.sort { pin1, pin2 in
@@ -182,7 +288,7 @@ public class HuntDataManager: ObservableObject {
             let order2 = pin2.order ?? Int.max
             return order1 < order2
           }
-          print("DEBUG: HuntDataManager - fetchHunt: Pins sorted by order field")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: Pins sorted by order field")
           
           // Log all pin data with order-based numbering for debugging
           for pin in data.pins {
@@ -195,16 +301,32 @@ public class HuntDataManager: ObservableObject {
           let conflictingPins = self.collectedPinIDs.intersection(serverPinIDs)
           
           if !conflictingPins.isEmpty {
-            print("DEBUG: HuntDataManager - fetchHunt: Server has \(conflictingPins.count) pins that we thought were collected, clearing cache")
-            print("DEBUG: HuntDataManager - fetchHunt: Conflicting pin IDs: \(conflictingPins)")
+            print("DEBUG: HuntDataManager - proceedWithHuntFetch: Server has \(conflictingPins.count) pins that we thought were collected, clearing cache")
+            print("DEBUG: HuntDataManager - proceedWithHuntFetch: Conflicting pin IDs: \(conflictingPins)")
             self.clearCollectedPins()
           }
           
           data.pins.removeAll { self.collectedPinIDs.contains($0.id ?? "") }
-          print("DEBUG: HuntDataManager - fetchHunt: After filtering collected pins, \(data.pins.count) pins remain")
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: After filtering collected pins, \(data.pins.count) pins remain")
           
           self.huntData = data
-          // Don't auto-join hunt here - let ContentView handle user registration flow
+          
+          // Check if the current user is already a participant and extract their phone
+          if let currentUserId = self.userId {
+            if let participant = data.participants.first(where: { $0.userId == currentUserId }) {
+              print("DEBUG: HuntDataManager - proceedWithHuntFetch: Found current user in participants!")
+              print("DEBUG: HuntDataManager - proceedWithHuntFetch: Participant phone: '\(participant.participantPhone ?? "nil")'")
+              
+              // Update user phone if we have it from participants
+              if let participantPhone = participant.participantPhone, !participantPhone.isEmpty {
+                self.userPhone = participantPhone
+                print("DEBUG: HuntDataManager - proceedWithHuntFetch: Updated userPhone from participants: '\(participantPhone)'")
+              }
+            } else {
+              print("DEBUG: HuntDataManager - proceedWithHuntFetch: Current user not found in participants")
+            }
+          }
+          
         case .failure(let error):
           self.errorMessage = error.localizedDescription
           self.joinStatusMessage = nil  // Clear any join messages on error
@@ -213,8 +335,8 @@ public class HuntDataManager: ObservableObject {
     }
   }
 
-  public func joinHunt(huntId: String) {
-    print("DEBUG: HuntDataManager - joinHunt called for huntId: \(huntId)")
+  public func joinHunt(huntId: String, phoneNumber: String) {
+    print("DEBUG: HuntDataManager - joinHunt called for huntId: \(huntId), phone: \(phoneNumber)")
     print("DEBUG: HuntDataManager - joinHunt: Current userName: '\(self.userName ?? "nil")'")
     print("DEBUG: HuntDataManager - joinHunt: Current userId: '\(self.userId ?? "nil")'")
     
@@ -223,15 +345,15 @@ public class HuntDataManager: ObservableObject {
       print("DEBUG: HuntDataManager - joinHunt: Checking database name for existing user")
       self.checkAndSyncUserName(userId: userId) { [weak self] in
         guard let self = self else { return }
-        self.proceedWithJoinHunt(huntId: huntId)
+        self.proceedWithJoinHunt(huntId: huntId, phoneNumber: phoneNumber)
       }
     } else {
       // No userId, proceed with normal registration
-      self.proceedWithJoinHunt(huntId: huntId)
+      self.proceedWithJoinHunt(huntId: huntId, phoneNumber: phoneNumber)
     }
   }
   
-  private func proceedWithJoinHunt(huntId: String) {
+  private func proceedWithJoinHunt(huntId: String, phoneNumber: String) {
     print("DEBUG: HuntDataManager - proceedWithJoinHunt called")
     registerUserIfNeeded { [weak self] success in
       guard let self = self else { return }
@@ -247,7 +369,7 @@ public class HuntDataManager: ObservableObject {
         return
       }
 
-      APIService.shared.joinHunt(huntId: huntId, userId: userId) { result in
+      APIService.shared.joinHunt(huntId: huntId, userId: userId, phoneNumber: phoneNumber) { result in
         DispatchQueue.main.async {
           switch result {
           case .success(let response):
@@ -264,6 +386,9 @@ public class HuntDataManager: ObservableObject {
             }
             self.hasJoinedHunt = true // Mark as joined
             
+            // Start hunt completion polling
+            self.startCompletionPolling(huntId: huntId)
+            
             // Clear the status message after 3 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
               self.joinStatusMessage = nil
@@ -278,34 +403,45 @@ public class HuntDataManager: ObservableObject {
   }
 
   public func collectPin(huntId: String, pinId: String) {
-    print("DEBUG: HuntDataManager - collectPin called for huntId: \(huntId), pinId: \(pinId)")
-    print("DEBUG: HuntDataManager - collectPin: hasJoinedHunt: \(hasJoinedHunt)")
+    print("🎯 HuntDataManager - collectPin called for huntId: \(huntId), pinId: \(pinId)")
+    print("🎯 HuntDataManager - collectPin: hasJoinedHunt: \(hasJoinedHunt)")
+    print("🎯 HuntDataManager - collectPin: Current time: \(Date())")
     
     registerUserIfNeeded { [weak self] success in
-      guard let self = self else { return }
-      print("DEBUG: HuntDataManager - collectPin: registerUserIfNeeded success: \(success)")
-      print("DEBUG: HuntDataManager - collectPin: userId: \(self.userId ?? "nil")")
+      guard let self = self else { 
+        print("🎯 HuntDataManager - collectPin: Self is nil, aborting")
+        return 
+      }
+      print("🎯 HuntDataManager - collectPin: registerUserIfNeeded success: \(success)")
+      print("🎯 HuntDataManager - collectPin: userId: \(self.userId ?? "nil")")
       
       guard success, let userId = self.userId else {
-        print("DEBUG: HuntDataManager - collectPin: Failed - User not registered")
+        print("🎯 HuntDataManager - collectPin: FAILED - User not registered. success: \(success), userId: \(self.userId ?? "nil")")
         self.errorMessage = "User not registered."
         return
       }
 
-      print("DEBUG: HuntDataManager - collectPin: Attempting to collect pinId: \(pinId)")
+      print("🎯 HuntDataManager - collectPin: About to call APIService.collectPin with:")
+      print("🎯   - huntId: \(huntId)")
+      print("🎯   - pinId: \(pinId)")  
+      print("🎯   - userId: \(userId)")
       
       APIService.shared.collectPin(huntId: huntId, pinId: pinId, userId: userId) { result in
+        print("🎯 HuntDataManager - collectPin: APIService callback received")
         DispatchQueue.main.async {
           switch result {
           case .success(let response):
-            // Handle successful collection, e.g., remove pin from map
-            print("DEBUG: HuntDataManager - collectPin: Successfully collected pin: \(response.pinId)")
-            print("DEBUG: HuntDataManager - collectPin: Original pinId sent: \(pinId), Response pinId: \(response.pinId)")
+            print("🎯 HuntDataManager - collectPin: ✅ SUCCESS - Collected pin: \(response.pinId)")
+            print("🎯 HuntDataManager - collectPin: Response message: \(response.message)")
+            print("🎯 HuntDataManager - collectPin: Original pinId sent: \(pinId), Response pinId: \(response.pinId)")
             self.collectedPinIDs.insert(response.pinId)
             self.saveCollectedPinIDs()
             self.removePin(pinId: response.pinId)
+            print("🎯 HuntDataManager - collectPin: Pin removed from local state")
           case .failure(let error):
-            print("DEBUG: HuntDataManager - collectPin: Failed to collect pin \(pinId): \(error.localizedDescription)")
+            print("🎯 HuntDataManager - collectPin: ❌ FAILED to collect pin \(pinId)")
+            print("🎯 HuntDataManager - collectPin: Error: \(error)")
+            print("🎯 HuntDataManager - collectPin: Error description: \(error.localizedDescription)")
             self.errorMessage = error.localizedDescription
           }
         }
@@ -317,5 +453,67 @@ public class HuntDataManager: ObservableObject {
     guard var huntData = huntData else { return }
     huntData.pins.removeAll { $0.id == pinId }
     self.huntData = huntData
+  }
+  
+  // MARK: - Hunt Completion Detection
+  
+  private func startCompletionPolling(huntId: String) {
+    print("DEBUG: HuntDataManager - Starting completion polling for hunt: \(huntId)")
+    
+    // Stop any existing timer
+    completionCheckTimer?.invalidate()
+    
+    // Poll every 10 seconds
+    completionCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+      self?.checkHuntCompletion(huntId: huntId)
+    }
+  }
+  
+  private func checkHuntCompletion(huntId: String) {
+    guard let userId = self.userId else { return }
+    
+    APIService.shared.fetchHuntWithUserContext(huntId: huntId, userId: userId) { [weak self] result in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+        
+        switch result {
+        case .success(let updatedHunt):
+          let wasCompleted = self.huntData?.isCompleted ?? false
+          let isNowCompleted = updatedHunt.isCompleted ?? false
+          
+          // Check if hunt just completed
+          if isNowCompleted && !wasCompleted {
+            print("DEBUG: HuntDataManager - Hunt completed! Winner: \(updatedHunt.winnerId ?? "unknown")")
+            self.huntData = updatedHunt
+            self.showCompletionScreen = true
+            self.stopCompletionPolling()
+          }
+          
+        case .failure(let error):
+          print("DEBUG: HuntDataManager - Failed to check hunt completion: \(error)")
+        }
+      }
+    }
+  }
+  
+  private func stopCompletionPolling() {
+    completionCheckTimer?.invalidate()
+    completionCheckTimer = nil
+  }
+  
+  public func dismissCompletionScreen() {
+    showCompletionScreen = false
+  }
+  
+  // Computed properties for completion screen
+  public var isWinner: Bool {
+    guard let huntData = huntData, let winnerId = huntData.winnerId, let userId = userId else {
+      return false
+    }
+    return winnerId == userId
+  }
+  
+  deinit {
+    stopCompletionPolling()
   }
 }

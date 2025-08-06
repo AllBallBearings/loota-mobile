@@ -21,9 +21,14 @@ public struct ContentView: View {
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
   @State private var showingNamePrompt = false
+  @State private var showingJoinPrompt = false
+  @State private var showingHuntConfirmation = false
   @State private var userName = ""
+  @State private var phoneNumber = ""
   @State private var isInitializing = true
   @State private var showingSplash = true
+  @State private var userConfirmedHunt = false
+  @State private var confirmedHuntId: String? = nil
 
   public init() {
     print("DEBUG: ContentView - init() called.")
@@ -64,18 +69,19 @@ public struct ContentView: View {
   private var mainAppContent: some View {
     ZStack {
       // Main container ZStack
-      // AR View in the background
-      // Condition to show ARViewContainer based on hunt type and data availability
-      if (currentHuntType == .geolocation && !objectLocations.isEmpty)
-        || (currentHuntType == .proximity && !proximityMarkers.isEmpty)
-      {
+      // AR View in the background - only show after user has confirmed hunt participation
+      // Condition to show ARViewContainer based on hunt type and user confirmation
+      // Keep AR view active even when all loot is collected for better user experience
+      if userConfirmedHunt && currentHuntType != nil {
         ARViewContainer(
           objectLocations: $objectLocations,
           referenceLocation: $locationManager.currentLocation.wrappedValue,
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
           onCoinCollected: { collectedPinId in
+            print("🎯 CONTENTVIEW: ===============================================")
             print("🎯 CONTENTVIEW: onCoinCollected called with pinId: \(collectedPinId)")
+            print("🎯 CONTENTVIEW: Timestamp: \(Date())")
             coinsCollected += 1
             print("🎯 CONTENTVIEW: Counter incremented to: \(coinsCollected)")
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
@@ -87,11 +93,16 @@ public struct ContentView: View {
             }
 
             if let huntId = huntDataManager.huntData?.id {
-              print("🎯 CONTENTVIEW: Calling API with huntId: \(huntId), pinId: \(collectedPinId)")
+              print("🎯 CONTENTVIEW: Found huntId: \(huntId)")
+              print("🎯 CONTENTVIEW: About to call huntDataManager.collectPin")
+              print("🎯 CONTENTVIEW: Parameters - huntId: \(huntId), pinId: \(collectedPinId)")
               huntDataManager.collectPin(huntId: huntId, pinId: collectedPinId)
+              print("🎯 CONTENTVIEW: huntDataManager.collectPin call completed")
             } else {
-              print("🎯 CONTENTVIEW: No huntId available for API call")
+              print("🎯 CONTENTVIEW: ❌ NO HUNT ID AVAILABLE")
+              print("🎯 CONTENTVIEW: huntDataManager.huntData: \(huntDataManager.huntData?.id ?? "nil")")
             }
+            print("🎯 CONTENTVIEW: ===============================================")
           },
           objectType: $selectedObject,
           currentHuntType: $currentHuntType,
@@ -104,23 +115,47 @@ public struct ContentView: View {
         .id("ar-view-\(currentHuntType?.rawValue ?? "none")")
         .edgesIgnoringSafeArea(.all)
       } else {
-        // Placeholder when no object is selected or no data loaded
+        // Placeholder when AR is not ready or hunt not confirmed
         Color.gray.edgesIgnoringSafeArea(.all)
         VStack {
-          Text("Select an object type or load hunt data")
-            .foregroundColor(.white)
-            .font(.title)
+          if showingHuntConfirmation {
+            Text("Hunt Found!")
+              .foregroundColor(.yellow)
+              .font(.title)
+            Text("Review details and confirm to join")
+              .foregroundColor(.white.opacity(0.7))
+              .font(.body)
+          } else if currentHuntType != nil && !userConfirmedHunt {
+            Text("Hunt Ready")
+              .foregroundColor(.white)
+              .font(.title)
+            Text("Complete confirmation to start hunting")
+              .foregroundColor(.white.opacity(0.7))
+              .font(.body)
+          } else {
+            Text("Loota Treasure Hunt")
+              .foregroundColor(.white)
+              .font(.title)
+            Text("Scan QR code or enter hunt ID to begin")
+              .foregroundColor(.white.opacity(0.7))
+              .font(.body)
+          }
 
-          // Display current hunt type and data counts for debugging
-          Text("Hunt Type: \(currentHuntType.map { $0.rawValue } ?? "None")")
-            .foregroundColor(.white)
-            .font(.caption)
-          Text("Geolocation Objects: \(objectLocations.count)")
-            .foregroundColor(.white)
-            .font(.caption)
-          Text("Proximity Markers: \(proximityMarkers.count)")
-            .foregroundColor(.white)
-            .font(.caption)
+          // Display current hunt type and data counts for debugging (only in debug mode)
+          if isDebugMode {
+            Text("Hunt Type: \(currentHuntType.map { $0.rawValue } ?? "None")")
+              .foregroundColor(.white)
+              .font(.caption)
+            Text("Geolocation Objects: \(objectLocations.count)")
+              .foregroundColor(.white)
+              .font(.caption)
+            Text("Proximity Markers: \(proximityMarkers.count)")
+              .foregroundColor(.white)
+              .font(.caption)
+            Text("User Confirmed: \(userConfirmedHunt ? "Yes" : "No")")
+              .foregroundColor(.white)
+              .font(.caption)
+          }
         }
       }
 
@@ -341,6 +376,39 @@ public struct ContentView: View {
         }
       }
       
+      // Hunt join confirmation screen overlay
+      if showingHuntConfirmation,
+         let huntData = huntDataManager.huntData {
+        HuntJoinConfirmationView(
+          huntData: huntData,
+          existingUserName: huntDataManager.userName,
+          existingUserId: huntDataManager.userId,
+          existingUserPhone: huntDataManager.userPhone,
+          isPresented: $showingHuntConfirmation,
+          onConfirm: { name, phone in
+            confirmHuntParticipation(name: name, phone: phone)
+          },
+          onCancel: {
+            cancelHuntParticipation()
+          }
+        )
+        .transition(.opacity)
+        .zIndex(1000) // Ensure it appears on top of everything
+      }
+      
+      // Hunt completion screen overlay
+      if huntDataManager.showCompletionScreen,
+         let huntData = huntDataManager.huntData,
+         let userId = huntDataManager.userId {
+        HuntCompletionView(
+          huntData: huntData,
+          currentUserId: userId,
+          isPresented: $huntDataManager.showCompletionScreen
+        )
+        .transition(.opacity)
+        .zIndex(999) // Ensure it appears on top
+      }
+      
     }
     .onChange(of: selectedObject) { oldValue, newValue in
       handleSelectedObjectChange(oldValue, newValue)
@@ -359,34 +427,32 @@ public struct ContentView: View {
       print(
         "ContentView onReceive: Updated heading: \(String(describing: newHeading?.trueHeading))")
     }
-    .alert("Welcome to Loota!", isPresented: $showingNamePrompt) {
-      TextField("Enter your name", text: $userName)
-      Button("OK") {
-        print("🔥 DEBUG: OK button tapped in alert!")
-        submitName()
-      }
-      Button("Use Anonymous", role: .cancel) {
-        print("🔥 DEBUG: Anonymous button tapped in alert!")
-        cancelNamePrompt()
-      }
-    } message: {
-      Text("Please enter your name to participate in the hunt, or choose Anonymous.")
-    }
+    // Note: Old alert-based prompts replaced with HuntJoinConfirmationView modal
+    // Keeping alert infrastructure for potential error dialogs or edge cases
     .onReceive(huntDataManager.$huntData) { huntData in
       if let huntData = huntData {
-        print("🔥 DEBUG: Hunt data received, checking if name prompt needed")
+        print("🔥 DEBUG: Hunt data received")
+        print("🔥 DEBUG: Hunt ID: \(huntData.id)")
+        print("🔥 DEBUG: Hunt Name: '\(huntData.name ?? "nil")'")
+        print("🔥 DEBUG: Hunt Description: '\(huntData.description ?? "nil")'")
+        print("🔥 DEBUG: userConfirmedHunt: \(userConfirmedHunt)")
+        print("🔥 DEBUG: confirmedHuntId: \(confirmedHuntId ?? "nil")")
+        print("🔥 DEBUG: showingHuntConfirmation: \(showingHuntConfirmation)")
         
-        // Load the hunt data first
+        // Load the hunt data first (but don't show AR yet - userConfirmedHunt is still false)
         loadHuntData(huntData)
         
-        // Only show name prompt if we need to prompt AND we haven't shown it yet for this hunt
-        if huntDataManager.shouldPromptForName {
-          print("🔥 DEBUG: Name prompt needed, showing modal")
-          showingNamePrompt = true
+        // Pre-fill user name if available
+        if let existingName = huntDataManager.userName {
+          userName = existingName
+        }
+        
+        // Only show hunt confirmation if user hasn't already confirmed this specific hunt
+        if confirmedHuntId != huntData.id {
+          print("🔥 DEBUG: New hunt or user hasn't confirmed this hunt yet, showing confirmation modal")
+          showingHuntConfirmation = true
         } else {
-          print("🔥 DEBUG: User already has name, joining hunt directly")
-          // User already has a name, proceed with joining hunt
-          huntDataManager.joinHunt(huntId: huntData.id)
+          print("🔥 DEBUG: User already confirmed hunt \(huntData.id), skipping confirmation modal")
         }
       }
     }
@@ -410,37 +476,76 @@ public struct ContentView: View {
     }
   }
   
+  // Note: Old alert-based methods replaced with unified confirmHuntParticipation
+  // Keeping for potential fallback scenarios or debug purposes
+  
   private func submitName() {
-    print("🔥 DEBUG: submitName() called!")
-    print("🔥 DEBUG: userName value: '\(userName)'")
-    let finalName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-    let nameToUse = finalName.isEmpty ? "Anonymous" : finalName
-    print("🔥 DEBUG: Using name: '\(nameToUse)'")
-    
-    huntDataManager.setUserName(nameToUse)
-    print("🔥 DEBUG: Set user name, dismissing modal")
-    
-    // Join hunt after setting name
-    if let huntData = huntDataManager.huntData {
-      print("🔥 DEBUG: Hunt data exists, joining hunt: \(huntData.id)")
-      huntDataManager.joinHunt(huntId: huntData.id)
-    } else {
-      print("🔥 DEBUG: No hunt data available")
-    }
+    // Legacy method - now handled by HuntJoinConfirmationView
+    print("🔥 DEBUG: submitName() called - should use confirmHuntParticipation instead")
   }
   
   private func cancelNamePrompt() {
-    print("🔥 DEBUG: cancelNamePrompt() called!")
+    // Legacy method - now handled by HuntJoinConfirmationView
+    print("🔥 DEBUG: cancelNamePrompt() called - should use cancelHuntParticipation instead")
+  }
+  
+  private func joinHuntWithPhone() {
+    // Legacy method - now handled by HuntJoinConfirmationView
+    print("🔥 DEBUG: joinHuntWithPhone() called - should use confirmHuntParticipation instead")
+  }
+  
+  private func confirmHuntParticipation(name: String, phone: String) {
+    print("🔥 DEBUG: confirmHuntParticipation called with name: '\(name)', phone: '\(phone)'")
     
-    // Use "Anonymous" if user cancels
-    huntDataManager.setUserName("Anonymous")
-    print("🔥 DEBUG: Set name to Anonymous, dismissing modal")
+    // Update local state
+    userName = name
+    phoneNumber = phone
     
-    // Still try to join hunt with Anonymous name
-    if let huntData = huntDataManager.huntData {
-      print("🔥 DEBUG: Hunt data exists, joining hunt with Anonymous")
-      huntDataManager.joinHunt(huntId: huntData.id)
+    // Update the user name in hunt manager if it changed
+    let currentName = huntDataManager.userName
+    if currentName != name {
+      print("🔥 DEBUG: User name changed from '\(currentName ?? "nil")' to '\(name)' - updating")
+      huntDataManager.setUserName(name)
     }
+    
+    // Update the user phone in hunt manager if it changed
+    let currentPhone = huntDataManager.userPhone
+    if currentPhone != phone {
+      print("🔥 DEBUG: User phone changed from '\(currentPhone ?? "nil")' to '\(phone)' - updating")
+      huntDataManager.setUserPhone(phone)
+    }
+    
+    // Join the hunt with phone number
+    if let huntData = huntDataManager.huntData {
+      print("🔥 DEBUG: Joining hunt '\(huntData.id)' with updated user data")
+      huntDataManager.joinHunt(huntId: huntData.id, phoneNumber: phone)
+      
+      // Mark hunt as confirmed and dismiss the confirmation screen
+      userConfirmedHunt = true
+      confirmedHuntId = huntData.id
+      showingHuntConfirmation = false
+      
+      print("🔥 DEBUG: Hunt participation confirmed for huntId: \(huntData.id), AR will now be initialized")
+    }
+  }
+  
+  private func cancelHuntParticipation() {
+    print("🔥 DEBUG: cancelHuntParticipation called")
+    
+    // Reset hunt data and state
+    showingHuntConfirmation = false
+    userConfirmedHunt = false
+    confirmedHuntId = nil
+    huntDataManager.huntData = nil
+    
+    // Clear hunt-related state
+    currentHuntType = nil
+    objectLocations = []
+    proximityMarkers = []
+    pinData = []
+    selectedObject = .none
+    
+    print("🔥 DEBUG: Hunt participation cancelled, returning to initial state")
   }
   
   private func handleSelectedObjectChange(_ oldValue: ARObjectType, _ newValue: ARObjectType) {
@@ -473,6 +578,13 @@ public struct ContentView: View {
       self.pinData = []
       
       for pin in huntData.pins {
+        // Skip pins that have already been collected
+        if pin.collectedByUserId != nil {
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: Skipping collected Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Collected by: \(pin.collectedByUserId ?? "unknown")")
+          continue
+        }
+        
         if let lat = pin.lat, let lng = pin.lng {
           let location = CLLocationCoordinate2D(latitude: lat, longitude: lng)
           self.objectLocations.append(location)
@@ -489,7 +601,8 @@ public struct ContentView: View {
       if !self.objectLocations.isEmpty && self.selectedObject == .none {
         self.selectedObject = .coin
       }
-      print("ContentView loadHuntData: Total AR objects created: \(self.objectLocations.count)")
+      let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), AR objects created: \(self.objectLocations.count)")
 
     case .proximity:
       print("ContentView loadHuntData: Processing \(huntData.pins.count) pins for proximity")
@@ -497,6 +610,13 @@ public struct ContentView: View {
       self.pinData = []
       
       for pin in huntData.pins {
+        // Skip pins that have already been collected
+        if pin.collectedByUserId != nil {
+          let markerNumber = (pin.order ?? -1) + 1
+          print("ContentView loadHuntData: Skipping collected Marker \(markerNumber) - ID: \(pin.id ?? "nil") - Collected by: \(pin.collectedByUserId ?? "unknown")")
+          continue
+        }
+        
         if let dist = pin.distanceFt, let dir = pin.directionStr {
           let marker = ProximityMarkerData(dist: dist * 0.3048, dir: dir)
           self.proximityMarkers.append(marker)
@@ -511,7 +631,8 @@ public struct ContentView: View {
       
       self.objectLocations = []
       self.selectedObject = .coin  // Default to coin for proximity
-      print("ContentView loadHuntData: Total proximity markers created: \(self.proximityMarkers.count)")
+      let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count)")
     }
     
     // Check if summoning hint should be shown after loading hunt data
