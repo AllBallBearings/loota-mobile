@@ -80,6 +80,22 @@ public class HuntDataManager: ObservableObject {
     print("DEBUG: HuntDataManager - User name set to '\(name)', will register fresh user")
   }
   
+  public func setUserPhone(_ phone: String) {
+    print("DEBUG: HuntDataManager - setUserPhone called with phone: '\(phone)'")
+    print("DEBUG: HuntDataManager - Current userPhone: '\(self.userPhone ?? "nil")'")
+    print("DEBUG: HuntDataManager - Current userId: '\(self.userId ?? "nil")'")
+    
+    // If we have a userId but the backend doesn't support phone updates,
+    // we need to clear the user data and register fresh with the correct phone
+    if self.userId != nil {
+      print("DEBUG: HuntDataManager - Backend doesn't support phone updates, clearing user data to register fresh")
+      self.clearUserData()
+    }
+    
+    self.userPhone = phone
+    print("DEBUG: HuntDataManager - User phone set to '\(phone)', will register fresh user")
+  }
+  
   private func clearUserData() {
     print("DEBUG: HuntDataManager - Clearing existing user data")
     self.userId = nil

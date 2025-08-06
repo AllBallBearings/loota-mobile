@@ -70,11 +70,9 @@ public struct ContentView: View {
     ZStack {
       // Main container ZStack
       // AR View in the background - only show after user has confirmed hunt participation
-      // Condition to show ARViewContainer based on hunt type, data availability, AND user confirmation
-      if userConfirmedHunt && (
-        (currentHuntType == .geolocation && !objectLocations.isEmpty)
-        || (currentHuntType == .proximity && !proximityMarkers.isEmpty)
-      ) {
+      // Condition to show ARViewContainer based on hunt type and user confirmation
+      // Keep AR view active even when all loot is collected for better user experience
+      if userConfirmedHunt && currentHuntType != nil {
         ARViewContainer(
           objectLocations: $objectLocations,
           referenceLocation: $locationManager.currentLocation.wrappedValue,
@@ -508,6 +506,13 @@ public struct ContentView: View {
     if currentName != name {
       print("🔥 DEBUG: User name changed from '\(currentName ?? "nil")' to '\(name)' - updating")
       huntDataManager.setUserName(name)
+    }
+    
+    // Update the user phone in hunt manager if it changed
+    let currentPhone = huntDataManager.userPhone
+    if currentPhone != phone {
+      print("🔥 DEBUG: User phone changed from '\(currentPhone ?? "nil")' to '\(phone)' - updating")
+      huntDataManager.setUserPhone(phone)
     }
     
     // Join the hunt with phone number
