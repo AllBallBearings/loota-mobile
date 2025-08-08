@@ -18,27 +18,12 @@ Loota Mobile is an iOS AR treasure hunting app built with Swift and SwiftUI. It 
 
 ### Testing
 
-## Testing Requirements
-
-- **Write tests for all new features** unless explicitly told not to
-- **Run tests before committing** to ensure code quality and functionality
-- Use `npm run test` to verify all tests pass before making commits
-- Tests should cover both happy path and edge cases for new functionality
-
 - Unit tests: `lootaTests/lootaTests.swift`
 - UI tests: `lootaUITests/lootaUITests.swift` and `lootaUITests/lootaUITestsLaunchTests.swift`
+- **Write tests for all new features** unless explicitly told not to
+- **Run tests before committing** to ensure code quality and functionality
 
 ## Architecture
-
-### Code Commits
-
-- Don't co-author with Claude or Claude-Code
-- Before committing any changes, ensure:
-
-1. All tests pass (`npm run test`)
-2. Code passes type checking (`npm run type-check`)
-3. Code passes linting (`npm run lint`)
-4. New features have corresponding tests written
 
 ### Core Components
 
@@ -240,8 +225,7 @@ The app requires these iOS permissions (defined in Info.plist):
 **Pending Dependencies**: Backend PUT endpoint for user name updates.
 
 # important-instruction-reminders
-
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

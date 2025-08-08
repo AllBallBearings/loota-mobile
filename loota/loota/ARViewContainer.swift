@@ -8,7 +8,7 @@ import CoreLocation
 import Foundation  // For UUID
 import RealityKit
 import SwiftUI
-import Vision  // For hand pose detection
+// Removed Vision import - no longer using hand tracking
 
 extension CLLocationDirection {
   public var degreesToRadians: Double { return self * .pi / 180 }
@@ -24,7 +24,8 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var currentHuntType: HuntType?
   @Binding public var proximityMarkers: [ProximityMarkerData]
   @Binding public var pinData: [PinData]
-  @Binding public var handTrackingStatus: String
+  @Binding public var isSummoningActive: Bool
+  @Binding public var focusedLootId: String?
   @Binding public var isDebugMode: Bool
 
   public init(
@@ -37,7 +38,8 @@ public struct ARViewContainer: UIViewRepresentable {
     currentHuntType: Binding<HuntType?>,
     proximityMarkers: Binding<[ProximityMarkerData]>,
     pinData: Binding<[PinData]>,
-    handTrackingStatus: Binding<String>,
+    isSummoningActive: Binding<Bool>,
+    focusedLootId: Binding<String?>,
     isDebugMode: Binding<Bool>
   ) {
     print(
@@ -52,7 +54,8 @@ public struct ARViewContainer: UIViewRepresentable {
     self._currentHuntType = currentHuntType
     self._proximityMarkers = proximityMarkers
     self._pinData = pinData
-    self._handTrackingStatus = handTrackingStatus
+    self._isSummoningActive = isSummoningActive
+    self._focusedLootId = focusedLootId
     self._isDebugMode = isDebugMode
   }
 
@@ -165,7 +168,8 @@ public struct ARViewContainer: UIViewRepresentable {
       currentHuntType: $currentHuntType,  // Pass binding
       proximityMarkers: $proximityMarkers,  // Pass binding
       pinData: $pinData,
-      handTrackingStatus: $handTrackingStatus,
+      isSummoningActive: $isSummoningActive,
+      focusedLootId: $focusedLootId,
       isDebugMode: $isDebugMode
     )
     // Set the placeObjectsAction on the newly created coordinator instance
@@ -188,7 +192,8 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var currentHuntType: HuntType?  // Added binding
     @Binding public var proximityMarkers: [ProximityMarkerData]  // Added binding
     @Binding public var pinData: [PinData]
-    @Binding public var handTrackingStatusBinding: String
+    @Binding public var isSummoningActiveBinding: Bool
+    @Binding public var focusedLootIdBinding: String?
     @Binding public var isDebugMode: Bool
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
 
@@ -202,20 +207,19 @@ public struct ARViewContainer: UIViewRepresentable {
     public weak var arView: ARView?
     public var audioPlayer: AVAudioPlayer?  // Moved audio player here
 
-    // Hand gesture detection properties
-    public var handPoseRequest: VNDetectHumanHandPoseRequest?
-    public var isHandVisible: Bool = false
-    public var isSummoning: Bool = false
+    // Button-based summoning properties
+    public var focusedEntity: ModelEntity? = nil
+    public var focusRange: Float = 5.0  // 5 meters focus range
     public var summoningEntity: ModelEntity?
     public var originalEntityPosition: SIMD3<Float>?
     public var summonStartTime: CFTimeInterval?
-    public let summonDuration: TimeInterval = 6.0  // Increased to 6 seconds for more visible animation
+    public let summonSpeed: Float = 0.8  // Meters per second - faster, more dramatic movement
     public let proximityThreshold: Float = 30.48  // 100 feet in meters
     public var collectedEntities: Set<ModelEntity> = []  // Track collected entities
     public var frameCounter: Int = 0
-    public var handTrackingStatus: String = "Initializing..."
-    public var lastHandDetectionTime: Date?
-    public var lastHandPosition: CGPoint?
+    // Focus detection properties
+    public var lastFocusUpdateTime: Date = Date()
+    // Removed hand position tracking
 
     // Hand visualization properties removed - no longer needed
 
@@ -260,7 +264,8 @@ public struct ARViewContainer: UIViewRepresentable {
       currentHuntType: Binding<HuntType?>,  // Added parameter
       proximityMarkers: Binding<[ProximityMarkerData]>,
       pinData: Binding<[PinData]>,
-      handTrackingStatus: Binding<String>,
+      isSummoningActive: Binding<Bool>,
+    focusedLootId: Binding<String?>,
       isDebugMode: Binding<Bool>
     ) {
       print("Coordinator init: Setting up.")
@@ -271,15 +276,16 @@ public struct ARViewContainer: UIViewRepresentable {
       self._currentHuntType = currentHuntType  // Assign binding
       self._proximityMarkers = proximityMarkers  // Assign binding
       self._pinData = pinData
-      self._handTrackingStatusBinding = handTrackingStatus
+      self._isSummoningActiveBinding = isSummoningActive
+      self._focusedLootIdBinding = focusedLootId
       self._isDebugMode = isDebugMode
 
       // Removed problematic referenceLocationObserver
 
       super.init()
 
-      // Setup hand pose detection
-      setupHandPoseDetection()
+      // Initialize focus detection system
+      setupFocusDetection()
 
       print(
         "Coordinator init: Initial referenceLocation = \(String(describing: initialReferenceLocation)))"
@@ -302,13 +308,20 @@ public struct ARViewContainer: UIViewRepresentable {
         return
       }
 
-      // Force placement if we have a valid reference location
-      if self.referenceLocation != nil {
-        self.placeObjectsAction?(arView)
-        self.hasPlacedObjects = true
+      print("Coordinator attemptPlacementIfReady: All conditions MET.")
+      
+      // CRITICAL FIX: Ensure baseAnchor exists BEFORE placing objects
+      print("🔧 PLACEMENT_FIX: Ensuring baseAnchor exists before object placement...")
+      self.ensureBaseAnchorExists(in: arView)
+      
+      // Verify baseAnchor was created
+      if self.baseAnchor != nil {
+        print("🔧 PLACEMENT_FIX: ✅ BaseAnchor confirmed - proceeding with placement")
+      } else {
+        print("🔧 PLACEMENT_FIX: ❌ BaseAnchor still nil - placement will fail!")
       }
-
-      print("Coordinator attemptPlacementIfReady: All conditions MET. Calling placeObjectsAction.")
+      
+      // Now place objects
       self.placeObjectsAction?(arView)  // This will call placeObjectsInARView
       self.hasPlacedObjects = true  // Mark as placed
     }
@@ -397,15 +410,25 @@ public struct ARViewContainer: UIViewRepresentable {
 
           if let baseAnchor = self.baseAnchor {
             baseAnchor.addChild(objectAnchor)  // Add object's anchor to the main rotated baseAnchor
-            print(
-              "Coordinator placeObjects: Added proximity anchor to self.baseAnchor at local position \(arPositionInBaseFrame)"
-            )
+            
+            // Debug final placement for geolocation
+            let finalWorldPosition = objectAnchor.position(relativeTo: nil)
+            print("📍 GEO_PLACEMENT_DEBUG: Added to baseAnchor at local pos: \(arPositionInBaseFrame)")
+            print("📍 GEO_PLACEMENT_DEBUG: Final world position: \(finalWorldPosition)")
+            print("📍 GEO_PLACEMENT_DEBUG: BaseAnchor world pos: \(baseAnchor.position(relativeTo: nil))")
+            
+            // Verify distance from camera
+            if let frame = arView.session.currentFrame {
+              let cameraPos = SIMD3<Float>(frame.camera.transform.columns.3.x, frame.camera.transform.columns.3.y, frame.camera.transform.columns.3.z)
+              let distanceFromCamera = simd_distance(finalWorldPosition, cameraPos)
+              print("📍 GEO_PLACEMENT_DEBUG: Distance from camera: \(distanceFromCamera)m")
+            }
           } else {
             // This case should ideally not happen if alignment occurs first
             // If it does, objectAnchor.position will be interpreted as world coordinates
             arView.scene.addAnchor(objectAnchor)
             print(
-              "Coordinator placeObjects: WARNING - Added proximity anchor directly to arView.scene (self.baseAnchor not found). Position \(arPositionInBaseFrame) will be world coords."
+              "⚠️ GEO_PLACEMENT_WARNING: Added directly to scene (no baseAnchor). Position \(arPositionInBaseFrame) as world coords."
             )
           }
           newEntities.append(entity)
@@ -460,6 +483,12 @@ public struct ARViewContainer: UIViewRepresentable {
           let z_local = Float(-marker.dist * cos(Double(markerAngleRadians)))  // Negative Z for South component
 
           let arPositionInBaseFrame = SIMD3<Float>(x_local, 0, z_local)  // Position relative to the base anchor
+          
+          print("🧭 PROXIMITY_DEBUG: === Proximity Marker Placement ===")
+          print("🧭 PROXIMITY_DEBUG: Marker \(index): Dist=\(marker.dist)m, Dir=\(marker.dir)")
+          print("🧭 PROXIMITY_DEBUG: Parsed angle: \(markerAngleRadians) radians (\(markerAngleRadians * 180 / .pi) degrees)")
+          print("🧭 PROXIMITY_DEBUG: Calculated position (x=East, z=-North): (\(x_local), 0, \(z_local))")
+          print("🧭 PROXIMITY_DEBUG: Distance from origin: \(sqrt(x_local*x_local + z_local*z_local))m")
 
           let objectAnchor = AnchorEntity()  // Create a new anchor, positioned relative to its parent
           objectAnchor.position = arPositionInBaseFrame  // Set its position within baseAnchor's coordinate system
@@ -495,15 +524,25 @@ public struct ARViewContainer: UIViewRepresentable {
 
           if let baseAnchor = self.baseAnchor {
             baseAnchor.addChild(objectAnchor)
-            print(
-              "Coordinator placeObjects: Added proximity anchor to self.baseAnchor at local position \(arPositionInBaseFrame)"
-            )
+            
+            // Debug final placement
+            let finalWorldPosition = objectAnchor.position(relativeTo: nil)
+            print("📍 PLACEMENT_DEBUG: Added to baseAnchor at local pos: \(arPositionInBaseFrame)")
+            print("📍 PLACEMENT_DEBUG: Final world position: \(finalWorldPosition)")
+            print("📍 PLACEMENT_DEBUG: BaseAnchor world pos: \(baseAnchor.position(relativeTo: nil))")
+            
+            // Verify distance from camera
+            if let frame = arView.session.currentFrame {
+              let cameraPos = SIMD3<Float>(frame.camera.transform.columns.3.x, frame.camera.transform.columns.3.y, frame.camera.transform.columns.3.z)
+              let distanceFromCamera = simd_distance(finalWorldPosition, cameraPos)
+              print("📍 PLACEMENT_DEBUG: Distance from camera: \(distanceFromCamera)m")
+            }
           } else {
             // This case should ideally not happen if alignment occurs first
             // If it does, objectAnchor.position will be interpreted as world coordinates
             arView.scene.addAnchor(objectAnchor)
             print(
-              "Coordinator placeObjects: WARNING - Added proximity anchor directly to arView.scene (self.baseAnchor not found). Position \(arPositionInBaseFrame) will be world coords."
+              "⚠️ PLACEMENT_WARNING: Added directly to scene (no baseAnchor). Position \(arPositionInBaseFrame) as world coords."
             )
           }
           newEntities.append(entity)
@@ -550,7 +589,7 @@ public struct ARViewContainer: UIViewRepresentable {
       }
     }
 
-    // Simplified conversion function
+    // More accurate GPS conversion function with debugging
     private func convertToARWorldCoordinate(
       objectLocation: CLLocationCoordinate2D, referenceLocation: CLLocationCoordinate2D
     ) -> SIMD3<Float> {
@@ -562,10 +601,25 @@ public struct ARViewContainer: UIViewRepresentable {
       let lon1 = referenceCLLocation.coordinate.longitude
       let lat2 = objectCLLocation.coordinate.latitude
       let lon2 = objectCLLocation.coordinate.longitude
-      let deltaNorth = (lat2 - lat1) * metersPerDegree
-      let deltaEast = (lon2 - lon1) * metersPerDegree * cos(Coordinator.degreesToRadians(lat1))
-      print("convertToARWorldCoordinate: Returning (E, -N): (\(deltaEast), \(-deltaNorth))")
-      return SIMD3<Float>(Float(deltaEast), 0, Float(-deltaNorth))  // Reverted to original
+      
+      // More accurate meters per degree calculation based on latitude
+      let latitudeRadians = Coordinator.degreesToRadians(lat1)
+      let metersPerDegreeLat = 111132.92 - 559.82 * cos(2 * latitudeRadians) + 1.175 * cos(4 * latitudeRadians)
+      let metersPerDegreeLon = 111412.84 * cos(latitudeRadians) - 93.5 * cos(3 * latitudeRadians)
+      
+      let deltaNorth = (lat2 - lat1) * metersPerDegreeLat
+      let deltaEast = (lon2 - lon1) * metersPerDegreeLon
+      
+      print("🗺️ GPS_CONVERSION: === GPS to AR Coordinate Conversion ===")
+      print("🗺️ GPS_CONVERSION: Reference: (\(lat1), \(lon1))")
+      print("🗺️ GPS_CONVERSION: Object: (\(lat2), \(lon2))")
+      print("🗺️ GPS_CONVERSION: Latitude difference: \(lat2 - lat1) degrees")
+      print("🗺️ GPS_CONVERSION: Longitude difference: \(lon2 - lon1) degrees")
+      print("🗺️ GPS_CONVERSION: Meters per degree - Lat: \(metersPerDegreeLat), Lon: \(metersPerDegreeLon)")
+      print("🗺️ GPS_CONVERSION: Delta North: \(deltaNorth)m, Delta East: \(deltaEast)m")
+      print("🗺️ GPS_CONVERSION: AR Position (East, Y, -North): (\(deltaEast), 0, \(-deltaNorth))")
+      
+      return SIMD3<Float>(Float(deltaEast), 0, Float(-deltaNorth))  // East, Y=0, -North for AR coordinates
     }
 
     // Helper to create a glowing, billboarded text label
@@ -590,23 +644,39 @@ public struct ARViewContainer: UIViewRepresentable {
       return labelEntity
     }
 
-    // Method to ensure baseAnchor exists at world origin with identity rotation.
+    // Method to ensure baseAnchor exists and check AR world alignment
     private func ensureBaseAnchorExists(in arView: ARView) {
-      print("Coordinator ensureBaseAnchorExists: Ensuring baseAnchor exists at identity.")
+      print("⚓ ANCHOR_DEBUG: === Base Anchor Setup ===")
+      
+      // Check current AR session alignment
+      if let frame = arView.session.currentFrame {
+        let cameraTransform = frame.camera.transform
+        print("⚓ ANCHOR_DEBUG: Camera transform: \(cameraTransform)")
+        print("⚓ ANCHOR_DEBUG: Camera position: \(cameraTransform.columns.3)")
+        
+        // Check if we have heading info
+        if let heading = self.heading {
+          print("⚓ ANCHOR_DEBUG: True heading: \(heading.trueHeading)°")
+          print("⚓ ANCHOR_DEBUG: Magnetic heading: \(heading.magneticHeading)°")
+          print("⚓ ANCHOR_DEBUG: Heading accuracy: \(heading.headingAccuracy)°")
+        } else {
+          print("⚓ ANCHOR_DEBUG: No heading available")
+        }
+      }
+      
       if baseAnchor == nil {
-        baseAnchor = AnchorEntity(world: .zero)  // Create anchor at world origin, identity rotation
+        baseAnchor = AnchorEntity(world: .zero)  // Create anchor at world origin
         arView.scene.addAnchor(baseAnchor!)
-        print(
-          "Coordinator ensureBaseAnchorExists: Created baseAnchor at world origin (identity rotation)."
-        )
+        print("⚓ ANCHOR_DEBUG: Created baseAnchor at world origin")
+        print("⚓ ANCHOR_DEBUG: BaseAnchor transform: \(baseAnchor!.transform)")
+        print("⚓ ANCHOR_DEBUG: BaseAnchor world position: \(baseAnchor!.position(relativeTo: nil))")
       } else {
-        if baseAnchor?.scene == nil {  // If it was removed (e.g. by session reset not used anymore)
+        if baseAnchor?.scene == nil {
           arView.scene.addAnchor(baseAnchor!)
         }
-        baseAnchor!.transform = .identity  // Ensure identity transform
-        print(
-          "Coordinator ensureBaseAnchorExists: Ensured existing baseAnchor is in scene and at identity."
-        )
+        print("⚓ ANCHOR_DEBUG: BaseAnchor already exists")
+        print("⚓ ANCHOR_DEBUG: BaseAnchor transform: \(baseAnchor!.transform)")
+        print("⚓ ANCHOR_DEBUG: BaseAnchor world position: \(baseAnchor!.position(relativeTo: nil))")
       }
     }
 
@@ -661,22 +731,38 @@ public struct ARViewContainer: UIViewRepresentable {
     }
 
     @objc public func updateRotation(displayLink: CADisplayLink) {
+      let frameStartTime = CACurrentMediaTime()
+      
       guard !coinEntities.isEmpty else { 
         if frameCounter % 300 == 0 { // Every 5 seconds
-          print("⚠️ UPDATE_ROTATION: Skipped - no coinEntities (isSummoning: \(isSummoning))")
+          print("⚠️ UPDATE_ROTATION: Skipped - no coinEntities")
         }
         return 
       }
       
-      // Debug updateRotation frequency during summoning
-      if isSummoning && frameCounter % 60 == 0 {
-        print("🔄 UPDATE_ROTATION: Running frame \(frameCounter) (isSummoning: \(isSummoning))")
+      // Update focus detection for button-based summoning
+      updateFocusDetection()
+      
+      // Handle button-based summoning state changes
+      if isSummoningActiveBinding && summoningEntity == nil && focusedEntity != nil {
+        // Button pressed and we have a focused entity - start summoning
+        startObjectSummoning()
+      } else if !isSummoningActiveBinding && summoningEntity != nil {
+        // Button released - stop summoning
+        stopObjectSummoning()
       }
-
+      
       let now = displayLink.timestamp
       let dt: Float
       if let last = lastTimestamp {
         dt = Float(now - last)
+        
+        // Debug frame timing during summoning
+        if isSummoningActiveBinding && frameCounter % 30 == 0 {
+          let fps = dt > 0 ? (1.0 / dt) : 0
+          print("🔄 FRAME_TIMING: Frame \(frameCounter), Delta: \(dt)s, FPS: \(fps)")
+          print("🔄 FRAME_TIMING: DisplayLink timestamp: \(now), Current time: \(frameStartTime)")
+        }
       } else {
         dt = 0  // First frame
       }
@@ -686,10 +772,72 @@ public struct ARViewContainer: UIViewRepresentable {
       let anglePerSecond: Float = 2 * .pi / Float(revolutionDuration)
       accumulatedAngle += anglePerSecond * dt
 
-      // Spin all entities
+      // Spin all entities and handle summoning movement
       let yRot = simd_quatf(angle: accumulatedAngle, axis: [0, 1, 0])
       for entity in coinEntities {
-        if self.objectType == .coin {  // Access wrapped value directly
+        // Handle summoned entity movement and rotation
+        if entity == summoningEntity {
+          // Apply smooth rotation even during summoning
+          if self.objectType == .coin {
+            let xRot = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+            entity.transform.rotation = yRot * xRot
+          } else {
+            entity.transform.rotation = yRot
+          }
+          
+          // Move toward camera only if summoning button is pressed
+          if isSummoningActiveBinding, let cameraTransform = arView?.session.currentFrame?.camera.transform {
+            let cameraPosition = SIMD3<Float>(
+              cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
+            
+            let currentWorldPosition = entity.position(relativeTo: nil)
+            let currentLocalPosition = entity.transform.translation
+            let direction = normalize(cameraPosition - currentWorldPosition)
+            let distance = simd_distance(currentWorldPosition, cameraPosition)
+            
+            // Debug logging every 30 frames for detailed analysis
+            if frameCounter % 30 == 0 {
+              print("🔍 COORDINATE_DEBUG: === Frame \(frameCounter) ===")
+              print("🔍 COORDINATE_DEBUG: Camera World Pos: \(cameraPosition)")
+              print("🔍 COORDINATE_DEBUG: Entity World Pos: \(currentWorldPosition)")
+              print("🔍 COORDINATE_DEBUG: Entity Local Pos: \(currentLocalPosition)")
+              print("🔍 COORDINATE_DEBUG: Direction Vector: \(direction)")
+              print("🔍 COORDINATE_DEBUG: Distance: \(distance)m")
+              
+              // Check entity's parent hierarchy
+              if let parent = entity.parent {
+                print("🔍 COORDINATE_DEBUG: Entity Parent: \(type(of: parent))")
+                if let anchor = parent as? AnchorEntity {
+                  print("🔍 COORDINATE_DEBUG: Parent Anchor World Pos: \(anchor.position(relativeTo: nil))")
+                }
+              }
+            }
+            
+            // Only move if not too close (stop at 0.3 meters - much closer to camera)
+            if distance > 0.3 {
+              let moveDistance = summonSpeed * dt  // Move based on frame time
+              let newWorldPosition = currentWorldPosition + direction * moveDistance
+              
+              // FIX: Set world position correctly instead of local translation
+              entity.setPosition(newWorldPosition, relativeTo: nil)
+              
+              // Debug the movement
+              if frameCounter % 30 == 0 {
+                print("🎯 SUMMONING: Moving \(moveDistance)m toward camera")
+                print("🎯 SUMMONING: New World Pos: \(newWorldPosition)")
+                print("🎯 SUMMONING: Speed: \(summonSpeed)m/s, DT: \(dt)s")
+              }
+            } else {
+              // Close enough - auto collect
+              print("🎯 SUMMONING: Object reached user at close range \(distance)m, auto-collecting")
+              autoCollectSummonedEntity(entity)
+            }
+          }
+          continue  // Skip normal rotation for summoned entity
+        }
+        
+        // Normal rotation for non-summoned entities
+        if self.objectType == .coin {
           let xRot = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
           entity.transform.rotation = yRot * xRot
         } else {
@@ -705,7 +853,7 @@ public struct ARViewContainer: UIViewRepresentable {
         cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
 
       // Debug: Log collection detection details every 60 frames (~1 second)
-      if frameCounter % 60 == 0 && isSummoning {
+      if frameCounter % 60 == 0 && isSummoningActiveBinding {
         print("🔍 COLLECTION_DEBUG: Running collection check (frame \(frameCounter))")
         print("🔍 COLLECTION_DEBUG: Camera position: \(cameraPosition)")
         print("🔍 COLLECTION_DEBUG: Summoning entity exists: \(summoningEntity != nil)")
@@ -801,198 +949,123 @@ public struct ARViewContainer: UIViewRepresentable {
       }
     }
 
-    // MARK: - Hand Pose Detection
+    // MARK: - Focus Detection
 
-    private func setupHandPoseDetection() {
-      print("🤲 HAND_TRACKING: Setting up hand pose detection")
-      handTrackingStatusBinding = "Setting up..."
-
-      handPoseRequest = VNDetectHumanHandPoseRequest { [weak self] request, error in
-        if let error = error {
-          print("🚨 HAND_TRACKING: Hand pose detection error: \(error)")
-          DispatchQueue.main.async {
-            self?.handTrackingStatusBinding = "Error: \(error.localizedDescription)"
-          }
-          return
-        }
-
-        guard let observations = request.results as? [VNHumanHandPoseObservation] else {
-          print("🤲 HAND_TRACKING: No hand observations found")
-          DispatchQueue.main.async {
-            self?.handTrackingStatusBinding = "No hands detected"
-            self?.lastHandDetectionTime = nil
-            // Clear hand visible state when no hand detected
-            if self?.isHandVisible == true {
-              print("🤲 HAND_TRACKING: Hand lost - clearing visible state")
-              self?.isHandVisible = false
-            }
-          }
-          return
-        }
-
-        print("🤲 HAND_TRACKING: Found \(observations.count) hand observation(s)")
-
-        DispatchQueue.main.async {
-          self?.lastHandDetectionTime = Date()
-          self?.processHandPoseObservations(observations)
-        }
-      }
-
-      // Configure the request for hand visibility detection
-      handPoseRequest?.maximumHandCount = 1
-      handTrackingStatusBinding = "Ready - Show hand to summon"
-      print("🤲 HAND_TRACKING: Setup complete - maximum hands: 1")
+    private func setupFocusDetection() {
+      print("🎯 FOCUS_DETECTION: Setting up loot focus detection")
+      isSummoningActiveBinding = false
+      focusedLootIdBinding = nil
+      print("🎯 FOCUS_DETECTION: Ready - aim at loot to focus")
     }
 
-    private func processHandPoseObservations(_ observations: [VNHumanHandPoseObservation]) {
-      let currentTime = Date()
-
-      guard let observation = observations.first else {
-        // No hand detected - clear summoning state
-        if isHandVisible {
-          print("🤲 HAND_TRACKING: Hand no longer visible, stopping summoning")
-          isHandVisible = false
-          if isSummoning {
-            stopObjectSummoning()
-          }
+    private func updateFocusDetection() {
+      guard let arView = arView, let camera = arView.session.currentFrame?.camera else { return }
+      
+      let now = Date()
+      // Update focus detection 10 times per second
+      guard now.timeIntervalSince(lastFocusUpdateTime) >= 0.1 else { return }
+      lastFocusUpdateTime = now
+      
+      let cameraTransform = camera.transform
+      let cameraPosition = SIMD3<Float>(
+        cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
+      
+      // Find the closest entity in center of screen within focus range
+      var centerEntity: ModelEntity? = nil
+      var closestDistance: Float = Float.infinity
+      
+      for entity in coinEntities {
+        let entityWorldPosition = entity.position(relativeTo: nil)
+        let distance = simd_distance(cameraPosition, entityWorldPosition)
+        
+        // Check if within focus range and in screen center
+        guard distance <= focusRange else { continue }
+        
+        let isInCenter = isEntityInScreenCenter(entity: entity, camera: camera, arView: arView)
+        if isInCenter && distance < closestDistance {
+          closestDistance = distance
+          centerEntity = entity
         }
-
-        // Hand visualization no longer needed
-
-        handTrackingStatusBinding = "No hand detected"
-        return
       }
-
-      do {
-        // Hand landmarks no longer needed for simplified tracking
-
-        // Get wrist point for position tracking
-        let wristPoint = try observation.recognizedPoint(.wrist)
-
-        // Check if hand is visible with good confidence
-        guard wristPoint.confidence > 0.6 else {
-          print(
-            "🤲 HAND_TRACKING: Low confidence wrist detection: \(String(format: "%.2f", wristPoint.confidence))"
-          )
-          handTrackingStatusBinding = "Hand detection poor quality"
-          // Clear hand visible state when confidence is low
-          if isHandVisible {
-            print("🤲 HAND_TRACKING: Hand confidence too low - clearing visible state")
-            isHandVisible = false
+      
+      // Update focused entity and binding
+      let previousFocusedEntity = focusedEntity
+      focusedEntity = centerEntity
+      
+      if let entity = centerEntity, let pinId = entityToPinId[entity] {
+        focusedLootIdBinding = pinId
+        // Add glow effect if newly focused
+        if previousFocusedEntity != centerEntity {
+          // Remove glow from previously focused entity
+          if let previousEntity = previousFocusedEntity {
+            removeGlowEffect(from: previousEntity)
           }
-          return
+          // Add glow to newly focused entity
+          addGlowEffect(to: entity)
         }
-
-        // Hand is visible and high quality - immediately activate summoning
-        let currentHandPosition = wristPoint.location
-
-        if !isHandVisible {
-          // Hand just became visible - start summoning immediately
-          print("🤲 HAND_TRACKING: Hand detected - immediately activating summoning!")
-          print("🧙‍♂️ SUMMONING: Starting summoning process...")
-          isHandVisible = true
-          startObjectSummoning()
-          if summoningEntity != nil {
-            isSummoning = true
-            handTrackingStatusBinding = "🚀 SUMMONING ACTIVE!"
-            print("🧙‍♂️ SUMMONING: Summoning entity set successfully")
-          } else {
-            handTrackingStatusBinding = "No objects nearby to summon"
-            print("🧙‍♂️ SUMMONING: No objects found within range for summoning")
-          }
-        } else if isSummoning && summoningEntity != nil {
-          // Continue summoning while hand remains visible
-          handTrackingStatusBinding = "🚀 SUMMONING CONTINUES!"
-          print("🧙‍♂️ SUMMONING: Summoning continues, hand still visible")
-        } else if !isSummoning && summoningEntity == nil {
-          // Hand is visible but not currently summoning - try to start new summoning
-          print("🤲 HAND_TRACKING: Hand visible and not summoning - attempting new summoning")
-          startObjectSummoning()
-          if summoningEntity != nil {
-            isSummoning = true
-            handTrackingStatusBinding = "🚀 SUMMONING NEW OBJECT!"
-            print("🧙‍♂️ SUMMONING: New summoning entity set successfully")
-          } else {
-            handTrackingStatusBinding = "Hand visible - no objects nearby"
-            print("🤲 HAND_TRACKING: Hand visible but no objects to summon")
-          }
+      } else {
+        focusedLootIdBinding = nil
+        // Remove glow effect if focus lost
+        if let previousEntity = previousFocusedEntity {
+          removeGlowEffect(from: previousEntity)
         }
-
-        // Update last position and time
-        lastHandPosition = currentHandPosition
-        lastHandDetectionTime = currentTime
-
-      } catch {
-        print("🚨 HAND_TRACKING: Error processing hand landmarks: \(error)")
-        handTrackingStatusBinding = "Hand tracking error"
       }
     }
 
-    // Removed complex hand landmark processing - now using simple wrist detection only
-
-    // Hand overlay and visualization methods removed - no longer needed for simplified summoning
+    // MARK: - Halo Effects
+    
+    private func addGlowEffect(to entity: ModelEntity) {
+      // Glow effect disabled for now
+      print("✨ GLOW: Glow effect disabled")
+    }
+    
+    private func removeGlowEffect(from entity: ModelEntity) {
+      // Find and remove glow from entity itself
+      for child in entity.children {
+        if child.name == "glow" {
+          child.removeFromParent()
+          print("✨ GLOW: Removed glow effect")
+          break
+        }
+      }
+    }
 
     // MARK: - Object Summoning
 
     private func startObjectSummoning() {
-      print("🧙‍♂️ SUMMONING: startObjectSummoning() called")
+      print("🧙‍♂️ SUMMONING: Button summoning started")
+      
+      // Use focused entity if available
+      guard let targetEntity = focusedEntity else {
+        print("🧙‍♂️ SUMMONING: ❌ No focused loot to summon")
+        return
+      }
       
       // Don't start if already summoning the same object
-      guard summoningEntity == nil else { 
-        print("🧙‍♂️ SUMMONING: Already summoning an object, skipping")
-        return 
-      }
-
-      guard let arView = arView, let camera = arView.session.currentFrame?.camera else {
-        print("🧙‍♂️ SUMMONING: No AR view or camera available")
+      guard summoningEntity != targetEntity else {
+        print("🧙‍♂️ SUMMONING: Already summoning this object")
         return
       }
-
-      let cameraTransform = camera.transform
-      let cameraPosition = SIMD3<Float>(
-        cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
-      print("🧙‍♂️ SUMMONING: Camera position: \(cameraPosition)")
-
-      // Find the closest entity that's in center of screen and within 100 feet
-      var centerEntity: ModelEntity?
-      var closestCenterDistance: Float = Float.infinity
       
-      print("🧙‍♂️ SUMMONING: Checking \(coinEntities.count) entities for center screen + proximity")
-
-      for (index, entity) in coinEntities.enumerated() {
-        let entityWorldPosition = entity.position(relativeTo: nil)
-        let distance = simd_distance(cameraPosition, entityWorldPosition)
-        
-        // Check if within 100 feet
-        guard distance <= proximityThreshold else {
-          print("🧙‍♂️ SUMMONING: Entity \(index) too far: \(distance)m (max: \(proximityThreshold)m)")
-          continue
-        }
-        
-        // Check if entity is in center of screen
-        let isInCenter = isEntityInScreenCenter(entity: entity, camera: camera, arView: arView)
-        print("🧙‍♂️ SUMMONING: Entity \(index) - Distance: \(distance)m, In center: \(isInCenter)")
-        
-        if isInCenter && distance < closestCenterDistance {
-          closestCenterDistance = distance
-          centerEntity = entity
-          print("🧙‍♂️ SUMMONING: New closest center entity found at \(distance)m")
-        }
-      }
-
-      guard let targetEntity = centerEntity else {
-        print("🧙‍♂️ SUMMONING: ❌ No objects in screen center within \(proximityThreshold)m")
-        isSummoning = false
+      let pinId = entityToPinId[targetEntity] ?? "unknown"
+      let shortId = pinId.prefix(8)
+      print("🧙‍♂️ SUMMONING: Starting summoning of loot ID:\(shortId)")
+      
+      // Get camera position for distance calculation
+      guard let arView = arView, let camera = arView.session.currentFrame?.camera else {
+        print("🧙‍♂️ SUMMONING: ❌ No camera available")
         return
       }
+      let cameraPosition = SIMD3<Float>(camera.transform.columns.3.x, camera.transform.columns.3.y, camera.transform.columns.3.z)
+      let entityPosition = targetEntity.position(relativeTo: nil)
+      let distance = simd_distance(entityPosition, cameraPosition)
 
-      print("🧙‍♂️ SUMMONING: ✅ Found center target entity at distance: \(closestCenterDistance) meters")
+      print("🧙‍♂️ SUMMONING: ✅ Found center target entity at distance: \(distance) meters")
 
       // Store the original position and start summoning
       summoningEntity = targetEntity
       originalEntityPosition = targetEntity.position(relativeTo: nil)
       summonStartTime = CACurrentMediaTime()
-      isSummoning = true
       
       // Validate entity is in our tracking arrays
       if let entityIndex = coinEntities.firstIndex(of: targetEntity) {
@@ -1007,7 +1080,7 @@ public struct ARViewContainer: UIViewRepresentable {
       }
       
       print("🧙‍♂️ SUMMONING: Summoning state set - starting animation...")
-      print("🧙‍♂️ SUMMONING: Current state - isSummoning: \(isSummoning), summoningEntity != nil: \(summoningEntity != nil)")
+      print("🧙‍♂️ SUMMONING: Current state - buttonActive: \(isSummoningActiveBinding), summoningEntity != nil: \(summoningEntity != nil)")
 
       // Start the summoning animation
       print("🧙‍♂️ SUMMONING: About to call animateObjectTowardsUser...")
@@ -1016,7 +1089,7 @@ public struct ARViewContainer: UIViewRepresentable {
       
       // Schedule a state check to verify summoning is still active
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-        print("🧙‍♂️ SUMMONING: 1s state check - isSummoning: \(self.isSummoning), entity exists: \(self.summoningEntity != nil)")
+        print("🧙‍♂️ SUMMONING: 1s state check - buttonActive: \(self.isSummoningActiveBinding), entity exists: \(self.summoningEntity != nil)")
       }
     }
 
@@ -1024,75 +1097,40 @@ public struct ARViewContainer: UIViewRepresentable {
       guard let entity = summoningEntity,
         let originalPosition = originalEntityPosition
       else {
-        isSummoning = false
+        // Clear summoning entity
+        summoningEntity = nil
+        originalEntityPosition = nil
+        summonStartTime = nil
         return
       }
 
-      // Stop any ongoing animation and return object to original position
-      entity.stopAllAnimations()
-
-      // Animate back to original position
-      let returnTransform = Transform(translation: originalPosition)
-      entity.move(to: returnTransform, relativeTo: nil, duration: 0.5)
+      // Return object to original position instantly
+      entity.setPosition(originalPosition, relativeTo: nil)
 
       // Clear summoning state
-      isSummoning = false
       summoningEntity = nil
       originalEntityPosition = nil
       summonStartTime = nil
 
-      print("Object summoning stopped, returning to original position")
+      print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position")
     }
 
     private func animateObjectTowardsUser(_ entity: ModelEntity, cameraPosition: SIMD3<Float>) {
       let entityPosition = entity.position(relativeTo: nil)
-      let direction = normalize(cameraPosition - entityPosition)
       let totalDistance = simd_distance(entityPosition, cameraPosition)
-      let animationStartTime = CACurrentMediaTime()
       
-      print("🎬 SIMPLE_ANIMATION: Starting \(summonDuration)-second approach at time: \(animationStartTime)")
-      print("🎬 SIMPLE_ANIMATION: Entity at: \(entityPosition), Camera at: \(cameraPosition)")
-      print("🎬 SIMPLE_ANIMATION: Distance: \(totalDistance)m")
-      print("🎬 SIMPLE_ANIMATION: Setting summoningEntity to: \(entity.debugDescription)")
+      print("🧙‍♂️ SUMMONING: Starting button-controlled summoning")
+      print("🧙‍♂️ SUMMONING: Entity at: \(entityPosition), Camera at: \(cameraPosition)")
+      print("🧙‍♂️ SUMMONING: Distance: \(totalDistance)m, Speed: \(summonSpeed)m/s")
 
-      // Store this entity as the summoning entity before animation starts
+      // Store this entity as the summoning entity
       summoningEntity = entity
       originalEntityPosition = entityPosition
-
-      // Move to 1.5 meters from camera over summonDuration seconds (close but still visible)
-      let targetDistance: Float = 1.5
-      let finalPosition = cameraPosition + direction * (-targetDistance) // Move toward camera
-      let finalTransform = Transform(translation: finalPosition)
+      summonStartTime = CACurrentMediaTime()
       
-      print("🎬 SIMPLE_ANIMATION: Moving from: \(entityPosition) to: \(finalPosition) over \(summonDuration) seconds")
-      print("🎬 SIMPLE_ANIMATION: Direction vector: \(direction), target distance: \(targetDistance)")
-      
-      // Make sure the entity is visible during animation by also scaling it up
-      let scaleAnimation = FromToByAnimation(
-        name: "scaleUp",
-        from: Transform(scale: SIMD3<Float>(1, 1, 1)),
-        to: Transform(scale: SIMD3<Float>(2, 2, 2)), // Scale up 2x to be more visible
-        duration: summonDuration,
-        timing: .easeInOut,
-        bindTarget: .transform
-      )
-      
-      // Position animation - slower easing for better visibility
-      entity.move(to: finalTransform, relativeTo: nil, duration: summonDuration, timingFunction: .easeOut)
-      
-      // Start scale animation
-      let scaleAnimationResource = try! AnimationResource.generate(with: scaleAnimation)
-      entity.playAnimation(scaleAnimationResource)
-      
-      // Auto-collect after animation completes - use exact timing
-      let delayTime = summonDuration + 0.1  // Reduced delay to 0.1 seconds for better timing
-      DispatchQueue.main.asyncAfter(deadline: .now() + delayTime) { [weak self] in
-        let collectionTime = CACurrentMediaTime()
-        print("🎬 SIMPLE_ANIMATION: Animation should be complete, collecting at time: \(collectionTime), elapsed: \(collectionTime - animationStartTime)")
-        self?.autoCollectSummonedEntity(entity)
-      }
-      
-      print("🎬 SIMPLE_ANIMATION: Animation started, auto-collection scheduled in \(delayTime) seconds")
+      // Movement will be handled frame-by-frame in updateRotation
+      // No pre-defined animation - it responds to button state
+      print("🧙‍♂️ SUMMONING: Summoning setup complete, object will move when button is held")
     }
 
 
@@ -1120,9 +1158,9 @@ public struct ARViewContainer: UIViewRepresentable {
       
       // Clear summoning state first to allow subsequent summoning
       print("🎯 AUTO_COLLECT: Clearing summoning state to allow subsequent summoning")
-      isSummoning = false
       summoningEntity = nil
       originalEntityPosition = nil
+      summonStartTime = nil
       
       // Add to collected entities for consistency
       collectedEntities.insert(entity)
@@ -1140,12 +1178,9 @@ public struct ARViewContainer: UIViewRepresentable {
       }
       entityToPinId.removeValue(forKey: entity)
       
-      print("🎯 AUTO_COLLECT: Providing immediate feedback, then calling API")
+      print("🎯 AUTO_COLLECT: Collection completed - triggering callback")
       
-      // Immediate UI feedback - play sound and visual effects
-      playCoinSound()
-      
-      // Trigger optimistic UI update with immediate callback
+      // Trigger UI update with callback
       onCoinCollected?(pinId)
     }
     
@@ -1320,41 +1355,17 @@ public struct ARViewContainer: UIViewRepresentable {
       if frameCounter % 6 == 0 {
         // Only print every 30th frame to reduce spam (every ~2 seconds at 15fps processing)
         if frameCounter % 180 == 0 {
-          print("🤲 HAND_TRACKING: Processing frame #\(frameCounter) (isHandVisible: \(isHandVisible), isSummoning: \(isSummoning))")
+          print("🎯 FOCUS_DEBUG: Processing frame #\(frameCounter) (focusedId: \(focusedLootIdBinding ?? "none"), buttonActive: \(isSummoningActiveBinding))")
         }
         
-        // Process the frame on a background queue to avoid retaining frames on main thread
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-          self?.processHandPoseInFrame(frame)
-        }
+        // Hand pose processing removed - using button-based summoning instead
       }
       
       // Important: Don't retain the frame beyond this method
       // The frame parameter will be automatically released when this method returns
     }
 
-    private func processHandPoseInFrame(_ frame: ARFrame) {
-      guard let handPoseRequest = handPoseRequest else {
-        print("🚨 HAND_TRACKING: handPoseRequest is nil!")
-        return
-      }
-
-      // Extract the pixel buffer immediately to avoid retaining the entire frame
-      let pixelBuffer = frame.capturedImage
-      
-      // Create the image request handler with just the pixel buffer
-      let imageRequestHandler = VNImageRequestHandler(
-        cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
-
-      do {
-        try imageRequestHandler.perform([handPoseRequest])
-        // Removed debug print to reduce console spam
-      } catch {
-        print("🚨 HAND_TRACKING: Failed to perform hand pose detection: \(error)")
-      }
-      
-      // The frame and pixelBuffer will be automatically released when this method returns
-    }
+    // Removed hand pose processing - using button-based summoning
 
     // Helper function to parse direction string (e.g., "N32E") into radians
     // Assuming format "Cardinal Degrees Cardinal" e.g., "N32E", "S45W", "E90S", "W0N" (pure West)

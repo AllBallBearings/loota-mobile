@@ -14,9 +14,9 @@ public struct ContentView: View {
   @State private var pinData: [PinData] = []
   @State private var statusMessage: String = ""
   @State private var currentHuntType: HuntType?
-  @State private var handTrackingStatus: String = "Hand tracking ready"
+  @State private var isSummoningActive: Bool = false
+  @State private var focusedLootId: String? = nil
   @State private var isDebugMode: Bool = false
-  @State private var showSummoningHint: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -108,7 +108,8 @@ public struct ContentView: View {
           currentHuntType: $currentHuntType,
           proximityMarkers: $proximityMarkers,
           pinData: $pinData,
-          handTrackingStatus: $handTrackingStatus,
+          isSummoningActive: $isSummoningActive,
+          focusedLootId: $focusedLootId,
           isDebugMode: $isDebugMode
         )
         // Use a stable ID that doesn't change during active gameplay
@@ -182,19 +183,44 @@ public struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
       }
 
-      // Summoning hint message (bottom center) - only when objects are within range
-      if showSummoningHint {
+      // Summoning Button - Bottom Center (always visible when loot is focused)
+      if let focusedId = focusedLootId {
         VStack {
           Spacer()
           
-          Text("🧙‍♂️ If loot is just out of reach, then summon it with an outstretched hand")
-            .font(.caption)
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(12)
-            .padding(.bottom, 120) // Above the debug panel
+          VStack(spacing: 8) {
+            // Circular Summoning Button
+            Button(action: {}) {
+              HStack(spacing: 2) {
+                Text("🫳")
+                  .font(.system(size: 18))
+                  .rotationEffect(.degrees(-90)) // Rotate 90 degrees counter-clockwise (wrist down, thumb to inside)
+                Text("🫴")
+                  .font(.system(size: 18))
+                  .rotationEffect(.degrees(-90)) // Rotate 90 degrees counter-clockwise (wrist down, thumb to inside)
+              }
+              .foregroundColor(.white)
+              .frame(width: 80, height: 80)
+              .background(isSummoningActive ? Color.green : Color.blue)
+              .clipShape(Circle())
+              .shadow(color: isSummoningActive ? .green : .blue, radius: isSummoningActive ? 12 : 6)
+            }
+            .scaleEffect(isSummoningActive ? 1.1 : 1.0)
+            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+              isSummoningActive = pressing
+            }) {
+              // Long press ended
+            }
+            
+            Text("Summon Loot")
+              .font(.caption)
+              .foregroundColor(.cyan)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 4)
+              .background(Color.black.opacity(0.7))
+              .cornerRadius(8)
+          }
+          .padding(.bottom, 100) // Above bottom edge but below debug panel
         }
         .frame(maxWidth: .infinity)
       }
@@ -324,14 +350,6 @@ public struct ContentView: View {
             .background(Color.white)
             .padding(.vertical, 4)
 
-          // Hand Tracking Status
-          Text("Hand Tracking:")
-            .font(.headline)
-            .foregroundColor(.white)
-          Text(handTrackingStatus)
-            .font(.caption)
-            .foregroundColor(handTrackingStatus.contains("🚀") ? .green : .yellow)
-            .multilineTextAlignment(.center)
             
 
           // Status message display (errors)
@@ -420,8 +438,6 @@ public struct ContentView: View {
       currentLocation = location
       print("ContentView onReceive: Updated currentLocation: \(String(describing: location))")
       
-      // Check if we should show summoning hint
-      updateSummoningHintVisibility()
     }
     .onReceive(locationManager.$heading) { newHeading in
       print(
@@ -634,47 +650,9 @@ public struct ContentView: View {
       let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
       print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count)")
     }
-    
-    // Check if summoning hint should be shown after loading hunt data
-    updateSummoningHintVisibility()
   }
 
 
-  // Method to check if summoning hint should be shown
-  private func updateSummoningHintVisibility() {
-    guard let currentLoc = currentLocation else {
-      showSummoningHint = false
-      return
-    }
-    
-    // Check if hunt is loaded and has objects
-    guard currentHuntType != nil, !objectLocations.isEmpty || !proximityMarkers.isEmpty else {
-      showSummoningHint = false
-      return
-    }
-    
-    let proximityThreshold: Double = 30.48 // 100 feet in meters
-    var hasNearbyObjects = false
-    
-    if currentHuntType == .geolocation {
-      // Check distance to geolocation objects
-      for objLocation in objectLocations {
-        let objCLLocation = CLLocation(latitude: objLocation.latitude, longitude: objLocation.longitude)
-        let userCLLocation = CLLocation(latitude: currentLoc.latitude, longitude: currentLoc.longitude)
-        let distance = userCLLocation.distance(from: objCLLocation)
-        
-        if distance <= proximityThreshold {
-          hasNearbyObjects = true
-          break
-        }
-      }
-    } else if currentHuntType == .proximity {
-      // For proximity hunts, assume objects are within range (they're positioned relative to user)
-      hasNearbyObjects = !proximityMarkers.isEmpty
-    }
-    
-    showSummoningHint = hasNearbyObjects
-  }
 
   // Method to display error messages from AppDelegate
   public func displayErrorMessage(_ message: String) {
@@ -684,7 +662,6 @@ public struct ContentView: View {
       self.proximityMarkers = []
       self.currentHuntType = nil
       self.selectedObject = .none
-      self.showSummoningHint = false
       print("ContentView displayErrorMessage: \(message)")
     }
   }
