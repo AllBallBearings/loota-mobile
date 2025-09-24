@@ -29,6 +29,7 @@ public struct ContentView: View {
   @State private var showingSplash = true
   @State private var userConfirmedHunt = false
   @State private var confirmedHuntId: String? = nil
+  @State private var isLoadingLoot = false
 
   public init() {
     print("DEBUG: ContentView - init() called.")
@@ -44,11 +45,14 @@ public struct ContentView: View {
       // Main app content (always present after splash)
       else {
         mainAppContent
-          .disabled(isInitializing) // Disable interaction during loading
+          .disabled(isInitializing || isLoadingLoot) // Disable interaction during loading
         
-        // Loading indicator overlay
+        // Loading indicator overlays
         if isInitializing {
-          LoadingIndicator(message: "Initializing Hunt...", showProgress: true)
+          LoadingIndicator(message: "Initializing Hunt...", showProgress: true, subtitle: "Please wait while we prepare your adventure")
+            .transition(.opacity)
+        } else if isLoadingLoot {
+          LoadingIndicator(message: "Loading Loot...", showProgress: true, subtitle: "Joining hunt and preparing AR treasures")
             .transition(.opacity)
         }
       }
@@ -454,21 +458,40 @@ public struct ContentView: View {
         print("🔥 DEBUG: userConfirmedHunt: \(userConfirmedHunt)")
         print("🔥 DEBUG: confirmedHuntId: \(confirmedHuntId ?? "nil")")
         print("🔥 DEBUG: showingHuntConfirmation: \(showingHuntConfirmation)")
-        
+
         // Load the hunt data first (but don't show AR yet - userConfirmedHunt is still false)
         loadHuntData(huntData)
-        
+
         // Pre-fill user name if available
         if let existingName = huntDataManager.userName {
           userName = existingName
         }
-        
+
         // Only show hunt confirmation if user hasn't already confirmed this specific hunt
         if confirmedHuntId != huntData.id {
           print("🔥 DEBUG: New hunt or user hasn't confirmed this hunt yet, showing confirmation modal")
           showingHuntConfirmation = true
         } else {
           print("🔥 DEBUG: User already confirmed hunt \(huntData.id), skipping confirmation modal")
+        }
+      }
+    }
+    .onReceive(huntDataManager.$joinStatusMessage) { joinMessage in
+      // When hunt join is successful, activate AR view
+      if joinMessage != nil {
+        print("🔥 DEBUG: Hunt join completed, activating AR view")
+        withAnimation(.easeInOut(duration: 0.5)) {
+          isLoadingLoot = false
+          userConfirmedHunt = true
+        }
+      }
+    }
+    .onReceive(huntDataManager.$errorMessage) { errorMessage in
+      // If there's an error during loading, stop the loading state
+      if isLoadingLoot && errorMessage != nil {
+        print("🔥 DEBUG: Hunt join failed, stopping loading state")
+        withAnimation(.easeInOut(duration: 0.3)) {
+          isLoadingLoot = false
         }
       }
     }
@@ -512,55 +535,62 @@ public struct ContentView: View {
   
   private func confirmHuntParticipation(name: String, phone: String) {
     print("🔥 DEBUG: confirmHuntParticipation called with name: '\(name)', phone: '\(phone)'")
-    
+
+    // Start loading state
+    withAnimation(.easeInOut(duration: 0.3)) {
+      isLoadingLoot = true
+      showingHuntConfirmation = false
+    }
+
     // Update local state
     userName = name
     phoneNumber = phone
-    
+
     // Update the user name in hunt manager if it changed
     let currentName = huntDataManager.userName
     if currentName != name {
       print("🔥 DEBUG: User name changed from '\(currentName ?? "nil")' to '\(name)' - updating")
       huntDataManager.setUserName(name)
     }
-    
+
     // Update the user phone in hunt manager if it changed
     let currentPhone = huntDataManager.userPhone
     if currentPhone != phone {
       print("🔥 DEBUG: User phone changed from '\(currentPhone ?? "nil")' to '\(phone)' - updating")
       huntDataManager.setUserPhone(phone)
     }
-    
+
     // Join the hunt with phone number
     if let huntData = huntDataManager.huntData {
       print("🔥 DEBUG: Joining hunt '\(huntData.id)' with updated user data")
       huntDataManager.joinHunt(huntId: huntData.id, phoneNumber: phone)
-      
-      // Mark hunt as confirmed and dismiss the confirmation screen
-      userConfirmedHunt = true
+
+      // Mark hunt as confirmed - AR initialization will happen after join completes
       confirmedHuntId = huntData.id
-      showingHuntConfirmation = false
-      
-      print("🔥 DEBUG: Hunt participation confirmed for huntId: \(huntData.id), AR will now be initialized")
+
+      print("🔥 DEBUG: Hunt participation confirmed for huntId: \(huntData.id), loading loot...")
     }
   }
   
   private func cancelHuntParticipation() {
     print("🔥 DEBUG: cancelHuntParticipation called")
-    
+
     // Reset hunt data and state
-    showingHuntConfirmation = false
+    withAnimation(.easeInOut(duration: 0.3)) {
+      showingHuntConfirmation = false
+      isLoadingLoot = false
+    }
     userConfirmedHunt = false
     confirmedHuntId = nil
     huntDataManager.huntData = nil
-    
+
     // Clear hunt-related state
     currentHuntType = nil
     objectLocations = []
     proximityMarkers = []
     pinData = []
     selectedObject = .none
-    
+
     print("🔥 DEBUG: Hunt participation cancelled, returning to initial state")
   }
   
