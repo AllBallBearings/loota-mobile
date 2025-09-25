@@ -3,13 +3,15 @@ import SwiftUI
 struct LoadingIndicator: View {
     @State private var isAnimating = false
     @State private var rotationAngle = 0.0
-    
+
     let message: String
     let showProgress: Bool
-    
-    init(message: String = "Initializing Hunt...", showProgress: Bool = true) {
+    let subtitle: String?
+
+    init(message: String = "Initializing Hunt...", showProgress: Bool = true, subtitle: String? = nil) {
         self.message = message
         self.showProgress = showProgress
+        self.subtitle = subtitle
     }
     
     var body: some View {
@@ -53,10 +55,12 @@ struct LoadingIndicator: View {
                     .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAnimating)
                 
                 // Optional subtitle
-                Text("Please wait while we prepare your adventure")
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundColor(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                }
             }
             .padding(.horizontal, 40)
         }
