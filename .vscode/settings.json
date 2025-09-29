@@ -18,5 +18,6 @@
     "titleBar.inactiveBackground": "#80008099",
     "titleBar.inactiveForeground": "#e7e7e799"
   },
-  "peacock.color": "purple"
+  "peacock.color": "purple",
+  "sweetpad.build.xcodeWorkspacePath": "loota/loota.xcodeproj/project.xcworkspace"
 }

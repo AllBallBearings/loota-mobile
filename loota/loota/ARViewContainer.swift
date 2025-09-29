@@ -27,6 +27,7 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var isSummoningActive: Bool
   @Binding public var focusedLootId: String?
   @Binding public var isDebugMode: Bool
+  @Binding public var showHorizonLine: Bool
 
   public init(
     objectLocations: Binding<[CLLocationCoordinate2D]>,
@@ -40,7 +41,8 @@ public struct ARViewContainer: UIViewRepresentable {
     pinData: Binding<[PinData]>,
     isSummoningActive: Binding<Bool>,
     focusedLootId: Binding<String?>,
-    isDebugMode: Binding<Bool>
+    isDebugMode: Binding<Bool>,
+    showHorizonLine: Binding<Bool>
   ) {
     print(
       "ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation)), heading=\(String(describing: heading.wrappedValue?.trueHeading)), huntType=\(String(describing: currentHuntType.wrappedValue)), proximityMarkers.count=\(proximityMarkers.wrappedValue.count))"
@@ -57,6 +59,7 @@ public struct ARViewContainer: UIViewRepresentable {
     self._isSummoningActive = isSummoningActive
     self._focusedLootId = focusedLootId
     self._isDebugMode = isDebugMode
+    self._showHorizonLine = showHorizonLine
   }
 
   // MARK: - UIViewRepresentable Methods
@@ -170,7 +173,8 @@ public struct ARViewContainer: UIViewRepresentable {
       pinData: $pinData,
       isSummoningActive: $isSummoningActive,
       focusedLootId: $focusedLootId,
-      isDebugMode: $isDebugMode
+      isDebugMode: $isDebugMode,
+      showHorizonLine: $showHorizonLine
     )
     // Set the placeObjectsAction on the newly created coordinator instance
     // The coordinator&#x27;s placeObjectsAction will call its own placeObjectsInARView method.
@@ -195,6 +199,7 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var isSummoningActiveBinding: Bool
     @Binding public var focusedLootIdBinding: String?
     @Binding public var isDebugMode: Bool
+    @Binding public var showHorizonLineBinding: Bool
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
 
     public var onCoinCollected: ((String) -> Void)?
@@ -225,6 +230,9 @@ public struct ARViewContainer: UIViewRepresentable {
 
     // Base anchor for world alignment
     public var baseAnchor: AnchorEntity?
+
+    // Horizon line properties
+    public var horizonEntity: ModelEntity?
 
     // Action to trigger object placement from the Coordinator
     public var placeObjectsAction: ((ARView?) -> Void)?  // This will be set to self.placeObjectsInARView
@@ -266,7 +274,8 @@ public struct ARViewContainer: UIViewRepresentable {
       pinData: Binding<[PinData]>,
       isSummoningActive: Binding<Bool>,
     focusedLootId: Binding<String?>,
-      isDebugMode: Binding<Bool>
+      isDebugMode: Binding<Bool>,
+      showHorizonLine: Binding<Bool>
     ) {
       print("Coordinator init: Setting up.")
       self.referenceLocation = initialReferenceLocation  // Assign initial value
@@ -279,6 +288,7 @@ public struct ARViewContainer: UIViewRepresentable {
       self._isSummoningActiveBinding = isSummoningActive
       self._focusedLootIdBinding = focusedLootId
       self._isDebugMode = isDebugMode
+      self._showHorizonLineBinding = showHorizonLine
 
       // Removed problematic referenceLocationObserver
 
@@ -644,6 +654,204 @@ public struct ARViewContainer: UIViewRepresentable {
       return labelEntity
     }
 
+    // Helper to create horizon line entity as a continuous 360-degree torus
+    private func createHorizonLineEntity() -> ModelEntity {
+      // Create a continuous 360-degree horizon ring using torus geometry
+      let majorRadius: Float = 30.0    // 30 meter radius from user
+      let minorRadius: Float = 0.05    // Thin ring thickness (5cm)
+
+      // Generate a torus mesh for a continuous ring
+      let torusMesh = MeshResource.generateBox(width: 0.1, height: 0.1, depth: 0.1) // Fallback mesh
+
+      // Since RealityKit doesn't have built-in torus generation, we'll create a custom mesh
+      let horizonRingEntity = createTorusEntity(majorRadius: majorRadius, minorRadius: minorRadius)
+
+      print("🌅 HORIZON_CREATE: Created continuous 360° torus - Major radius: \(majorRadius)m, Minor radius: \(minorRadius)m")
+      print("🌅 HORIZON_CREATE: Color: Light blue with 50% opacity")
+
+      return horizonRingEntity
+    }
+
+    // Helper to create a true continuous torus using custom mesh generation
+    private func createTorusEntity(majorRadius: Float, minorRadius: Float) -> ModelEntity {
+      // Generate a mathematically continuous torus mesh
+      let torusMesh = generateTorusMesh(majorRadius: majorRadius, minorRadius: minorRadius)
+
+      // Light blue color with 50% opacity
+      let horizonColor = UIColor(red: 0.6, green: 0.8, blue: 1.0, alpha: 0.5) // Light blue, 50% transparent
+      let material = UnlitMaterial(color: horizonColor)
+
+      let horizonRingEntity = ModelEntity(mesh: torusMesh, materials: [material])
+      horizonRingEntity.name = "horizon_torus_continuous"
+
+      print("🌅 HORIZON_CREATE: Generated continuous torus mesh with \(majorRadius)m major radius, \(minorRadius)m minor radius")
+
+      return horizonRingEntity
+    }
+
+    // Generate a continuous torus mesh using parametric equations
+    private func generateTorusMesh(majorRadius: Float, minorRadius: Float) -> MeshResource {
+      let majorSegments = 64  // Resolution around the major circle
+      let minorSegments = 16  // Resolution around the minor circle (tube thickness)
+
+      var vertices: [SIMD3<Float>] = []
+      var normals: [SIMD3<Float>] = []
+      var indices: [UInt32] = []
+
+      // Generate vertices and normals using torus parametric equations
+      for i in 0..<majorSegments {
+        let u = Float(i) * 2.0 * .pi / Float(majorSegments)  // Major angle (around the ring)
+
+        for j in 0..<minorSegments {
+          let v = Float(j) * 2.0 * .pi / Float(minorSegments)  // Minor angle (around the tube)
+
+          // Parametric torus equations:
+          // x = (R + r*cos(v)) * cos(u)
+          // y = r * sin(v)
+          // z = (R + r*cos(v)) * sin(u)
+          let cosV = cos(v)
+          let sinV = sin(v)
+          let cosU = cos(u)
+          let sinU = sin(u)
+
+          let x = (majorRadius + minorRadius * cosV) * cosU
+          let y = minorRadius * sinV
+          let z = (majorRadius + minorRadius * cosV) * sinU
+
+          vertices.append(SIMD3<Float>(x, y, z))
+
+          // Calculate normal vector for smooth shading
+          let normalX = cosV * cosU
+          let normalY = sinV
+          let normalZ = cosV * sinU
+          normals.append(normalize(SIMD3<Float>(normalX, normalY, normalZ)))
+        }
+      }
+
+      // Generate triangle indices for the torus surface
+      for i in 0..<majorSegments {
+        let i1 = (i + 1) % majorSegments
+
+        for j in 0..<minorSegments {
+          let j1 = (j + 1) % minorSegments
+
+          // Current quad vertices
+          let a = UInt32(i * minorSegments + j)
+          let b = UInt32(i1 * minorSegments + j)
+          let c = UInt32(i1 * minorSegments + j1)
+          let d = UInt32(i * minorSegments + j1)
+
+          // Create two triangles per quad
+          indices.append(contentsOf: [a, b, c])  // Triangle 1
+          indices.append(contentsOf: [a, c, d])  // Triangle 2
+        }
+      }
+
+      // Create mesh descriptor
+      var meshDescriptor = MeshDescriptor()
+      meshDescriptor.positions = MeshBuffers.Positions(vertices)
+      meshDescriptor.normals = MeshBuffers.Normals(normals)
+      meshDescriptor.primitives = .triangles(indices)
+
+      do {
+        let mesh = try MeshResource.generate(from: [meshDescriptor])
+        print("🌅 MESH_GEN: Generated continuous torus with \(vertices.count) vertices, \(indices.count/3) triangles")
+        return mesh
+      } catch {
+        print("🌅 MESH_ERROR: Failed to generate torus mesh: \(error)")
+        // Fallback to a simple box if mesh generation fails
+        return MeshResource.generateBox(width: 0.1, height: 0.1, depth: 0.1)
+      }
+    }
+
+    // Method to setup horizon line
+    private func setupHorizonLine(in arView: ARView) {
+      guard showHorizonLineBinding, horizonEntity == nil, let baseAnchor = baseAnchor else {
+        print("🌅 HORIZON: Skipping horizon setup - showHorizonLine: \(showHorizonLineBinding), horizonEntity exists: \(horizonEntity != nil), baseAnchor exists: \(baseAnchor != nil)")
+        return
+      }
+
+      print("🌅 HORIZON: Setting up horizon line")
+
+      // Create horizon entity
+      horizonEntity = createHorizonLineEntity()
+
+      guard let horizon = horizonEntity else { return }
+
+      // Position horizon line at a reasonable distance (50 meters away from origin)
+      // Place it at Y=0 (ground level) initially - will be updated dynamically
+      horizon.position = SIMD3<Float>(0, 0, 50)
+
+      // Add to base anchor for consistent world alignment
+      baseAnchor.addChild(horizon)
+
+      print("🌅 HORIZON: Horizon line added to baseAnchor at position: \(horizon.position)")
+    }
+
+    // Method to update horizon line position based on camera
+    private func updateHorizonLine(arView: ARView) {
+      guard showHorizonLineBinding, let horizon = horizonEntity,
+            let cameraTransform = arView.session.currentFrame?.camera.transform else {
+        // Debug every 300 frames (~5 seconds) to avoid spam
+        if frameCounter % 300 == 0 {
+          print("🌅 HORIZON_UPDATE: Skipped - showHorizonLine: \(showHorizonLineBinding), horizonEntity: \(horizonEntity != nil), camera: \(arView.session.currentFrame?.camera != nil)")
+        }
+        return
+      }
+
+      // Get camera position and orientation
+      let cameraPosition = SIMD3<Float>(
+        cameraTransform.columns.3.x,
+        cameraTransform.columns.3.y,
+        cameraTransform.columns.3.z
+      )
+
+      // Position horizon ring at camera's Y level, centered on the user
+      let horizonY = cameraPosition.y // Same height as camera for true horizon
+
+      // For a 360-degree ring, we position it centered on the user (no X/Z offset needed)
+      // The ring is built around the origin, so we just set the Y position
+      let newPosition = SIMD3<Float>(0, horizonY, 0)
+      horizon.position = newPosition
+
+      // Debug every 150 frames (~2.5 seconds) to avoid spam
+      if frameCounter % 150 == 0 {
+        print("🌅 HORIZON_UPDATE: Camera pos: \(cameraPosition)")
+        print("🌅 HORIZON_UPDATE: Horizon ring center: \(newPosition)")
+        print("🌅 HORIZON_UPDATE: Horizon world pos: \(horizon.position(relativeTo: nil))")
+        print("🌅 HORIZON_UPDATE: Horizon enabled: \(horizon.isEnabled)")
+        print("🌅 HORIZON_UPDATE: Continuous torus entity: \(horizon.name ?? "unnamed")")
+      }
+
+      // No rotation needed for 360-degree ring - it's symmetric in all directions
+    }
+
+    // Method to toggle horizon line visibility
+    public func toggleHorizonLine() {
+      let oldValue = showHorizonLineBinding
+      showHorizonLineBinding.toggle()
+      let newValue = showHorizonLineBinding
+
+      print("🌅 HORIZON_TOGGLE: Changed from \(oldValue) to \(newValue)")
+      print("🌅 HORIZON_TOGGLE: horizonEntity exists: \(horizonEntity != nil)")
+
+      if showHorizonLineBinding {
+        // Show horizon line
+        horizonEntity?.isEnabled = true
+        print("🌅 HORIZON_TOGGLE: Horizon line enabled, entity enabled: \(horizonEntity?.isEnabled ?? false)")
+
+        // If no entity exists yet, try to create it
+        if horizonEntity == nil, let arView = arView {
+          print("🌅 HORIZON_TOGGLE: No entity exists, trying to setup...")
+          setupHorizonLine(in: arView)
+        }
+      } else {
+        // Hide horizon line
+        horizonEntity?.isEnabled = false
+        print("🌅 HORIZON_TOGGLE: Horizon line disabled")
+      }
+    }
+
     // Method to ensure baseAnchor exists and check AR world alignment
     private func ensureBaseAnchorExists(in arView: ARView) {
       print("⚓ ANCHOR_DEBUG: === Base Anchor Setup ===")
@@ -670,6 +878,9 @@ public struct ARViewContainer: UIViewRepresentable {
         print("⚓ ANCHOR_DEBUG: Created baseAnchor at world origin")
         print("⚓ ANCHOR_DEBUG: BaseAnchor transform: \(baseAnchor!.transform)")
         print("⚓ ANCHOR_DEBUG: BaseAnchor world position: \(baseAnchor!.position(relativeTo: nil))")
+
+        // Setup horizon line after base anchor is created
+        setupHorizonLine(in: arView)
       } else {
         if baseAnchor?.scene == nil {
           arView.scene.addAnchor(baseAnchor!)
@@ -677,6 +888,9 @@ public struct ARViewContainer: UIViewRepresentable {
         print("⚓ ANCHOR_DEBUG: BaseAnchor already exists")
         print("⚓ ANCHOR_DEBUG: BaseAnchor transform: \(baseAnchor!.transform)")
         print("⚓ ANCHOR_DEBUG: BaseAnchor world position: \(baseAnchor!.position(relativeTo: nil))")
+
+        // Setup horizon line if it doesn't exist yet
+        setupHorizonLine(in: arView)
       }
     }
 
@@ -742,7 +956,26 @@ public struct ARViewContainer: UIViewRepresentable {
       
       // Update focus detection for button-based summoning
       updateFocusDetection()
-      
+
+      // Update horizon line position and handle setup
+      if let arView = arView {
+        // If horizon line should be shown but doesn't exist, create it
+        if showHorizonLineBinding && horizonEntity == nil {
+          setupHorizonLine(in: arView)
+        }
+
+        // Update position if it exists and toggle visibility
+        updateHorizonLine(arView: arView)
+
+        // Handle visibility toggle
+        if let horizon = horizonEntity {
+          horizon.isEnabled = showHorizonLineBinding
+          if frameCounter % 300 == 0 { // Debug every 5 seconds
+            print("🌅 HORIZON_VISIBILITY: showHorizonLineBinding=\(showHorizonLineBinding), entity.isEnabled=\(horizon.isEnabled)")
+          }
+        }
+      }
+
       // Handle button-based summoning state changes
       if isSummoningActiveBinding && summoningEntity == nil && focusedEntity != nil {
         // Button pressed and we have a focused entity - start summoning
@@ -1308,8 +1541,10 @@ public struct ARViewContainer: UIViewRepresentable {
       self.anchors.removeAll()
       self.coinEntities.removeAll()  // Assuming coinEntities are children of these anchors
 
-      // If baseAnchor exists, its children (which were in self.anchors) should now be gone.
-      // For sanity, one could also do baseAnchor?.children.removeAll(), but it might be redundant.
+      // Clear horizon line but keep it for reuse
+      horizonEntity?.removeFromParent()
+      horizonEntity = nil
+
       print("Coordinator clearAnchors: All tracked anchors removed from scene and internal lists.")
     }
 

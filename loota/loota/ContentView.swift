@@ -17,6 +17,7 @@ public struct ContentView: View {
   @State private var isSummoningActive: Bool = false
   @State private var focusedLootId: String? = nil
   @State private var isDebugMode: Bool = false
+  @State private var showHorizonLine: Bool = true
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -114,7 +115,8 @@ public struct ContentView: View {
           pinData: $pinData,
           isSummoningActive: $isSummoningActive,
           focusedLootId: $focusedLootId,
-          isDebugMode: $isDebugMode
+          isDebugMode: $isDebugMode,
+          showHorizonLine: $showHorizonLine
         )
         // Use a stable ID that doesn't change during active gameplay
         .id("ar-view-\(currentHuntType?.rawValue ?? "none")")
@@ -354,7 +356,26 @@ public struct ContentView: View {
             .background(Color.white)
             .padding(.vertical, 4)
 
-            
+          // Horizon line toggle
+          Button(action: {
+            showHorizonLine.toggle()
+          }) {
+            HStack {
+              Image(systemName: showHorizonLine ? "minus.circle.fill" : "plus.circle.fill")
+                .foregroundColor(showHorizonLine ? .orange : .cyan)
+              Text("Horizon Line")
+                .foregroundColor(.white)
+              Spacer()
+              Text(showHorizonLine ? "ON" : "OFF")
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(showHorizonLine ? .orange : .gray)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(8)
+          }
 
           // Status message display (errors)
           Text(huntDataManager.errorMessage ?? statusMessage)
