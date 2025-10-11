@@ -1,100 +1,57 @@
-# Loota Mobile - Todo List
+# Loota Mobile - App Store Submission Checklist
 
-## App Store Submission Requirements
+The items below still need to be completed or verified before the app can ship to the Apple App Store.
 
-### Critical Requirements (Must Fix Before Submission)
+## Immediate Blockers
 
-#### 1. App Icons Missing ❌
-- **Issue**: No app icon images found in `Assets.xcassets/AppIcon.appiconset/`
-- **Required**: 1024x1024px icon in PNG format
-- **Impact**: App Store will reject without proper icons
-- **Priority**: CRITICAL
+1. **Secure the API Key** (`loota/loota/Environment.swift:24`)  
+   - Remove the hardcoded production key from source.  
+   - Load secrets from build settings, XCConfig, or the Keychain at runtime.  
+   - Add a lightweight runtime guard to crash/log if the key is missing to avoid shipping a build without credentials.
 
-#### 2. API Key Security Issue ⚠️
-- **Issue**: Hardcoded API key in `Environment.swift:27`
-- **Required**: Move to Xcode build settings or secure keychain storage
-- **Impact**: Exposes sensitive data, security vulnerability
-- **Priority**: HIGH
+2. **Publish and Reference a Privacy Policy**  
+   - Host a publicly accessible privacy policy covering camera and location usage.  
+   - Add `NSPrivacyPolicyURL` to `loota/loota/Info.plist` pointing at that page.  
+   - Re-run the App Privacy questionnaire in App Store Connect with consistent answers.
 
-#### 3. Privacy Policy Required ❌
-- **Issue**: App collects location data and uses camera but no privacy policy URL
-- **Required**: Add `NSPrivacyPolicyURL` to Info.plist
-- **Impact**: Apple requires privacy policy for location/camera permissions
-- **Priority**: CRITICAL
+## Release Configuration
 
-### Important Items
+3. **Lower the Deployment Target**  
+   - Project settings currently target iOS 18.0/18.2 (`loota/loota.xcodeproj/project.pbxproj`).  
+   - Drop to at least iOS 16.0 unless a hard dependency blocks it, then QA on devices running the minimum OS.
 
-#### 4. iOS Deployment Target ⚠️
-- **Current**: iOS 18.0 (very recent)
-- **Recommendation**: Lower to iOS 16.0+ for broader device compatibility
-- **Impact**: Current target excludes many devices
-- **Priority**: MEDIUM
+4. **Finalize Bundle Identifier & Signing**  
+   - Confirm the bundle ID (`allballbearings.loota`) is registered in the Apple Developer account.  
+   - Create App Store distribution certificate & provisioning profile, then enable automatic signing in Xcode or add the profiles to CI.
 
-#### 5. Bundle Identifier
-- **Current**: `allballbearings.loota`
-- **Required**: Ensure this matches your Apple Developer account
-- **Priority**: MEDIUM
+5. **Archive & Verify Release Build**  
+   - Produce an `Archive` build with the App Store provisioning profile.  
+   - Validate in Organizer for bitcode, app thinning, and ensure no debug artifacts (debug logging for API key, etc.).
 
-#### 6. Code Signing & Provisioning
-- **Required**: 
-  - Valid Apple Developer account
-  - App Store distribution certificate
-  - App Store provisioning profile
-- **Priority**: HIGH
+## App Store Connect Assets
 
-### App Store Listing Requirements
+6. **Prepare Marketing Materials**  
+   - Capture required device screenshots for all supported display classes (iPhone Pro/Max, standard, iPad if supported).  
+   - Record an optional AR preview video to strengthen the listing.  
+   - Draft polished description, subtitle, keywords, and release notes.  
+   - Select category/subcategory and complete the age-rating questionnaire.
 
-#### 7. Marketing Materials Needed
-- **Screenshots**: iPhone + iPad (if supporting iPad)
-- **App Preview Video**: Optional but recommended for AR apps
-- **App Description**: Compelling description with keywords
-- **App Category**: Select appropriate category
-- **Age Rating**: Complete age rating questionnaire
-- **Priority**: MEDIUM
+7. **Fill Required Metadata**  
+   - Supply Support URL, Marketing URL (optional), and contact email.  
+   - Set pricing/availability and regions.  
+   - Configure in-app events or promotional text if desired.
 
-#### 8. App Store Metadata
-- **App Name**: Primary app name
-- **Subtitle**: Short descriptive subtitle
-- **Promotional Text**: Marketing copy
-- **Release Notes**: Version release information
-- **Support URL**: Customer support website
-- **Copyright**: Copyright information
-- **Priority**: MEDIUM
+## QA & Compliance
 
-### Testing & Quality Assurance
+8. **Test on Physical Hardware**  
+   - Exercise AR flows on at least one A12+ device running the minimum OS and the latest release candidate build.  
+   - Verify location permissions, camera usage, battery impact, and background behavior.
 
-#### 9. Physical Device Testing
-- **Requirement**: AR features must be tested on physical iOS device
-- **Issue**: Simulator cannot test ARKit functionality properly
-- **Priority**: HIGH
+9. **Guideline & Permission Audit**  
+   - Double-check usage descriptions for camera/location are precise and match in-app behavior.  
+   - Ensure onboarding clearly explains location usage to satisfy App Review.  
+   - Remove debug-only endpoints, test accounts, and verbose logging before final build.
 
-#### 10. App Store Review Guidelines Compliance
-- **Check**: Location services properly justified
-- **Check**: AR experience doesn't encourage dangerous behavior
-- **Check**: No hardcoded credentials or test data in production
-- **Priority**: HIGH
+## Recently Completed
 
-## Implementation Priority Order
-
-### Phase 1: Critical Blockers
-1. ✅ Create and add app icons (1024x1024px)
-2. ✅ Add privacy policy URL to Info.plist
-3. ✅ Move API key to secure build settings
-
-### Phase 2: Important Setup
-4. ✅ Configure code signing and provisioning profiles
-5. ✅ Test thoroughly on physical iOS device
-6. ✅ Review iOS deployment target (consider lowering)
-
-### Phase 3: App Store Preparation
-7. ✅ Create marketing screenshots and materials
-8. ✅ Write app description and metadata
-9. ✅ Complete App Store listing information
-10. ✅ Final compliance review
-
-## Notes
-
-- **Current Status**: App is technically complete but missing critical App Store requirements
-- **Architecture**: Well-designed with proper AR implementation
-- **Main Blockers**: App icons, privacy policy, and API key security
-- **Estimated Timeline**: 1-2 days for critical fixes, 1 week for full submission preparation
+- **Expand App Icon Set** – Generated the full suite of iOS icon sizes and updated `AppIcon.appiconset/Contents.json` so the asset catalog now passes App Store requirements.  
