@@ -8,6 +8,7 @@ import CoreLocation
 import Foundation  // For UUID
 import RealityKit
 import SwiftUI
+import UIKit
 // Removed Vision import - no longer using hand tracking
 
 extension CLLocationDirection {
@@ -66,11 +67,19 @@ public struct ARViewContainer: UIViewRepresentable {
 
   public func makeUIView(context: Context) -> ARView {
     print("ARViewContainer makeUIView called.")
-    // Reset alignment flag for debugging, to ensure alignment is attempted each time view is made
-    // context.coordinator.hasAlignedToNorth = false // Potentially problematic if coordinator is reused; better to do this in init if needed
-    // For now, let&#x27;s rely on the Coordinator&#x27;s own initialization of hasAlignedToNorth = false
+
+    // CRITICAL FIX: Reset placement flag when creating new ARView
+    // This allows objects to be placed again if the view is recreated
+    context.coordinator.hasPlacedObjects = false
+    print("🔧 AR_SETUP: Reset hasPlacedObjects to false for new ARView")
 
     let arView = ARView(frame: .zero)
+
+    // CRITICAL FIX: Ensure camera feed is rendered
+    arView.renderOptions = [.disableDepthOfField, .disableMotionBlur]
+    arView.environment.background = .cameraFeed()
+
+    print("🎥 AR_SETUP: ARView created with camera feed background")
 
     // Configure AR session for world tracking
     let worldConfig = ARWorldTrackingConfiguration()
@@ -778,9 +787,9 @@ public struct ARViewContainer: UIViewRepresentable {
 
       guard let horizon = horizonEntity else { return }
 
-      // Position horizon line at a reasonable distance (50 meters away from origin)
-      // Place it at Y=0 (ground level) initially - will be updated dynamically
-      horizon.position = SIMD3<Float>(0, 0, 50)
+      // Position horizon ring at origin - it will be updated dynamically to camera Y level
+      // The torus is already sized to 30m radius, so it surrounds the user
+      horizon.position = SIMD3<Float>(0, 0, 0)
 
       // Add to base anchor for consistent world alignment
       baseAnchor.addChild(horizon)
@@ -799,25 +808,28 @@ public struct ARViewContainer: UIViewRepresentable {
         return
       }
 
-      // Get camera position and orientation
+      // Get camera position
       let cameraPosition = SIMD3<Float>(
         cameraTransform.columns.3.x,
         cameraTransform.columns.3.y,
         cameraTransform.columns.3.z
       )
 
-      // Position horizon ring at camera's Y level, centered on the user
-      let horizonY = cameraPosition.y // Same height as camera for true horizon
+      // Position horizon ring at camera's Y level
+      // Since the ring is a child of baseAnchor, we need to convert camera position to baseAnchor space
+      if let baseAnchor = baseAnchor {
+        // Convert camera world position to baseAnchor local space
+        let cameraWorldTransform = Transform(matrix: cameraTransform)
+        let cameraLocalY = baseAnchor.convert(position: cameraPosition, from: nil).y
 
-      // For a 360-degree ring, we position it centered on the user (no X/Z offset needed)
-      // The ring is built around the origin, so we just set the Y position
-      let newPosition = SIMD3<Float>(0, horizonY, 0)
-      horizon.position = newPosition
+        // Keep the ring centered at XZ origin of baseAnchor, only adjust Y
+        horizon.position = SIMD3<Float>(0, cameraLocalY, 0)
+      }
 
       // Debug every 150 frames (~2.5 seconds) to avoid spam
       if frameCounter % 150 == 0 {
         print("🌅 HORIZON_UPDATE: Camera pos: \(cameraPosition)")
-        print("🌅 HORIZON_UPDATE: Horizon ring center: \(newPosition)")
+        print("🌅 HORIZON_UPDATE: Horizon local pos: \(horizon.position)")
         print("🌅 HORIZON_UPDATE: Horizon world pos: \(horizon.position(relativeTo: nil))")
         print("🌅 HORIZON_UPDATE: Horizon enabled: \(horizon.isEnabled)")
         print("🌅 HORIZON_UPDATE: Continuous torus entity: \(horizon.name ?? "unnamed")")
@@ -1203,21 +1215,40 @@ public struct ARViewContainer: UIViewRepresentable {
       let cameraPosition = SIMD3<Float>(
         cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
       
-      // Find the closest entity in center of screen within focus range
+      // Camera forward direction (negative Z column)
+      let forwardVector = normalize(
+        SIMD3<Float>(
+          -cameraTransform.columns.2.x,
+          -cameraTransform.columns.2.y,
+          -cameraTransform.columns.2.z
+        )
+      )
+
+      // Focus cone angle (in radians) that defines "center"
+      let focusConeAngle: Float = 8.0 * (.pi / 180.0)  // About 8° field around center
+
       var centerEntity: ModelEntity? = nil
       var closestDistance: Float = Float.infinity
-      
+      var smallestAngle: Float = Float.infinity
+
       for entity in coinEntities {
         let entityWorldPosition = entity.position(relativeTo: nil)
-        let distance = simd_distance(cameraPosition, entityWorldPosition)
-        
-        // Check if within focus range and in screen center
+        let toEntity = entityWorldPosition - cameraPosition
+        let distance = simd_length(toEntity)
+
         guard distance <= focusRange else { continue }
-        
-        let isInCenter = isEntityInScreenCenter(entity: entity, camera: camera, arView: arView)
-        if isInCenter && distance < closestDistance {
-          closestDistance = distance
+
+        let direction = normalize(toEntity)
+        let dotProduct = simd_dot(forwardVector, direction)
+        let clampedDot = max(min(dotProduct, 1.0), -1.0)
+        let angle = acos(clampedDot)
+
+        guard angle <= focusConeAngle else { continue }
+
+        if angle < smallestAngle || (abs(angle - smallestAngle) < 0.5 * (.pi / 180.0) && distance < closestDistance) {
           centerEntity = entity
+          closestDistance = distance
+          smallestAngle = angle
         }
       }
       
@@ -1248,18 +1279,121 @@ public struct ARViewContainer: UIViewRepresentable {
     // MARK: - Halo Effects
     
     private func addGlowEffect(to entity: ModelEntity) {
-      // Glow effect disabled for now
-      print("✨ GLOW: Glow effect disabled")
+      // Remove any existing glow to avoid stacking
+      removeGlowEffect(from: entity)
+
+      // Use the entity's visual bounds to size the glow so it wraps the mesh
+      let bounds = entity.visualBounds(relativeTo: entity)
+      let maxExtent = max(bounds.extents.x, max(bounds.extents.y, bounds.extents.z))
+      let baseDiameter = max(maxExtent * 1.3, 0.3)  // Keep large enough for small meshes
+
+      guard
+        let outerMaterial = makeGlowMaterial(style: .outer),
+        let innerMaterial = makeGlowMaterial(style: .inner)
+      else {
+        print("✨ GLOW: Failed to create glow materials")
+        return
+      }
+
+      // Outer soft haze
+      let outerPlane = ModelEntity(
+        mesh: MeshResource.generatePlane(width: baseDiameter * 1.6, depth: baseDiameter * 1.6),
+        materials: [outerMaterial]
+      )
+      outerPlane.name = "glow_outer"
+      outerPlane.position = .zero
+      outerPlane.components.set(BillboardComponent())
+
+      // Inner tighter ring
+      let innerPlane = ModelEntity(
+        mesh: MeshResource.generatePlane(width: baseDiameter, depth: baseDiameter),
+        materials: [innerMaterial]
+      )
+      innerPlane.name = "glow_inner"
+      innerPlane.position = .zero
+      innerPlane.components.set(BillboardComponent())
+
+      entity.addChild(outerPlane)
+      entity.addChild(innerPlane)
+      print("✨ GLOW: Added layered glow planes around focused loot")
     }
-    
+
     private func removeGlowEffect(from entity: ModelEntity) {
-      // Find and remove glow from entity itself
+      // Find and remove glow planes from entity
       for child in entity.children {
-        if child.name == "glow" {
+        if child.name == "glow_outer" || child.name == "glow_inner" {
           child.removeFromParent()
           print("✨ GLOW: Removed glow effect")
-          break
         }
+      }
+    }
+
+    private enum GlowStyle {
+      case outer
+      case inner
+    }
+
+    private static var cachedOuterGlowTexture: TextureResource?
+    private static var cachedInnerGlowTexture: TextureResource?
+
+    private func makeGlowMaterial(style: GlowStyle) -> UnlitMaterial? {
+      guard let texture = Self.glowTexture(for: style) else { return nil }
+
+      let tint = UIColor(red: 1.0, green: 0.88, blue: 0.3, alpha: style == .outer ? 0.35 : 0.6)
+      var material = UnlitMaterial()
+      material.color = .init(tint: tint, texture: .init(texture))
+      return material
+    }
+
+    private static func glowTexture(for style: GlowStyle) -> TextureResource? {
+      switch style {
+      case .outer:
+        if let texture = cachedOuterGlowTexture { return texture }
+        guard let generated = generateRadialGlowTexture(innerAlpha: 0.75, outerAlpha: 0.0) else { return nil }
+        cachedOuterGlowTexture = generated
+        return generated
+      case .inner:
+        if let texture = cachedInnerGlowTexture { return texture }
+        guard let generated = generateRadialGlowTexture(innerAlpha: 1.0, outerAlpha: 0.08) else { return nil }
+        cachedInnerGlowTexture = generated
+        return generated
+      }
+    }
+
+    private static func generateRadialGlowTexture(innerAlpha: CGFloat, outerAlpha: CGFloat) -> TextureResource? {
+      let size = CGSize(width: 256, height: 256)
+      let format = UIGraphicsImageRendererFormat()
+      format.opaque = false
+      format.scale = 1.0
+      let renderer = UIGraphicsImageRenderer(size: size, format: format)
+      let image = renderer.image { context in
+        guard let gradient = CGGradient(
+          colorsSpace: CGColorSpaceCreateDeviceRGB(),
+          colors: [
+            UIColor(white: 1.0, alpha: innerAlpha).cgColor,
+            UIColor(white: 1.0, alpha: outerAlpha).cgColor,
+          ] as CFArray,
+          locations: [0.0, 1.0]
+        ) else { return }
+
+        let center = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
+        context.cgContext.drawRadialGradient(
+          gradient,
+          startCenter: center,
+          startRadius: 0,
+          endCenter: center,
+          endRadius: max(size.width, size.height) / 2.0,
+          options: [.drawsAfterEndLocation]
+        )
+      }
+
+      guard let cgImage = image.cgImage else { return nil }
+      do {
+        let texture = try TextureResource.generate(from: cgImage, options: .init(semantic: .color))
+        return texture
+      } catch {
+        print("✨ GLOW: Failed to generate texture: \(error)")
+        return nil
       }
     }
 
@@ -1417,63 +1551,6 @@ public struct ARViewContainer: UIViewRepresentable {
       onCoinCollected?(pinId)
     }
     
-    private func findClosestCenterEntity(camera: ARCamera, arView: ARView) -> ModelEntity? {
-      guard !coinEntities.isEmpty else { return nil }
-      
-      let screenBounds = arView.bounds
-      let screenCenter = CGPoint(x: screenBounds.width / 2, y: screenBounds.height / 2)
-      
-      // Define center area as 30% of screen area (radius covers 30% of screen)
-      let screenArea = screenBounds.width * screenBounds.height
-      let centerAreaRadius = sqrt(screenArea * 0.30) / 2
-      
-      print("🎯 CLOSEST_CENTER: Screen bounds: \(screenBounds), center area radius: \(centerAreaRadius)")
-      
-      var closestEntity: ModelEntity?
-      var closestScreenDistance: CGFloat = CGFloat.greatestFiniteMagnitude
-      var closestWorldDistance: Float = Float.greatestFiniteMagnitude
-      
-      for entity in coinEntities {
-        let entityWorldPosition = entity.position(relativeTo: nil)
-        let cameraPosition = camera.transform.columns.3
-        let cameraPos3D = SIMD3<Float>(cameraPosition.x, cameraPosition.y, cameraPosition.z)
-        let worldDistance = simd_distance(cameraPos3D, entityWorldPosition)
-        
-        // Project to screen coordinates
-        guard let screenPoint = arView.project(entityWorldPosition) else { continue }
-        
-        // Calculate distance from screen center
-        let screenDistance = sqrt(pow(screenPoint.x - screenCenter.x, 2) + pow(screenPoint.y - screenCenter.y, 2))
-        
-        // Check if in center region
-        let isInCenter = screenDistance <= centerAreaRadius
-        
-        if isInCenter {
-          // Among center entities, find the closest in 3D space
-          if worldDistance < closestWorldDistance {
-            closestEntity = entity
-            closestScreenDistance = screenDistance
-            closestWorldDistance = worldDistance
-          }
-        }
-        
-        print("🎯 CLOSEST_CENTER: Entity screen distance: \(screenDistance), world distance: \(worldDistance), in center: \(isInCenter)")
-      }
-      
-      if let closest = closestEntity {
-        print("🎯 CLOSEST_CENTER: Found closest entity at screen distance: \(closestScreenDistance), world distance: \(closestWorldDistance)")
-      } else {
-        print("🎯 CLOSEST_CENTER: No entities found in center region")
-      }
-      
-      return closestEntity
-    }
-    
-    private func isEntityInScreenCenter(entity: ModelEntity, camera: ARCamera, arView: ARView) -> Bool {
-      // Use the new closest center detection
-      return findClosestCenterEntity(camera: camera, arView: arView) == entity
-    }
-
     private func findAnchorForEntity(_ entity: ModelEntity) -> AnchorEntity? {
       // Find the anchor that contains this entity
       for anchor in anchors {
@@ -1694,5 +1771,3 @@ public struct ARViewContainer: UIViewRepresentable {
     }
   }  // End Coordinator Class
 }  // End Struct ARViewContainer
-
-

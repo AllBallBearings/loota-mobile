@@ -80,7 +80,7 @@ public struct ContentView: View {
       if userConfirmedHunt && currentHuntType != nil {
         ARViewContainer(
           objectLocations: $objectLocations,
-          referenceLocation: $locationManager.currentLocation.wrappedValue,
+          referenceLocation: locationManager.currentLocation,
           statusMessage: $statusMessage,
           heading: $locationManager.heading,
           onCoinCollected: { collectedPinId in
