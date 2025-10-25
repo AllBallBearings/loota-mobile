@@ -202,7 +202,31 @@ struct HuntJoinConfirmationView: View {
                 .padding()
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Prize Disclaimer
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                            .font(.caption)
+                        Text("Prize Disclaimer")
+                            .font(.caption.bold())
+                            .foregroundColor(.yellow)
+                    }
+
+                    Text("Hunt creators may offer prizes at their discretion. Loota does not guarantee prizes or handle prize fulfillment. By joining, you agree to share your contact information with the hunt creator for communication purposes only.")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding()
+                .background(Color.orange.opacity(0.2))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+                )
+
                 // Action buttons
                 VStack(spacing: 12) {
                     Button(action: {

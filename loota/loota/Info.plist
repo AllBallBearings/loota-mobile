@@ -10,5 +10,7 @@
 	<string>This app uses location services to place virtual treasures at real-world locations.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app uses location services to place virtual treasures at real-world locations.</string>
+	<key>LOOTA_API_KEY</key>
+	<string>AYOYloSpuBCcwAz5xMFs6Iei/e4UXrBsTmr8jAj063KWcFn46m5Jzj+FNq2hAYdD</string>
 </dict>
 </plist>
