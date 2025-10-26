@@ -16,6 +16,7 @@ public struct ContentView: View {
   @State private var currentHuntType: HuntType?
   @State private var isSummoningActive: Bool = false
   @State private var focusedLootId: String? = nil
+  @State private var focusedLootDistance: Float? = nil
   @State private var isDebugMode: Bool = false
   @State private var showHorizonLine: Bool = true
 
@@ -36,8 +37,19 @@ public struct ContentView: View {
     print("DEBUG: ContentView - init() called.")
   }
 
+  // Computed property to calculate remaining loot count
+  private var remainingLootCount: Int {
+    guard let huntData = huntDataManager.huntData else { return 0 }
+    let totalPins = huntData.pins.count
+    let collectedPins = huntData.pins.filter { $0.collectedByUserId != nil }.count
+    return totalPins - collectedPins
+  }
+
   public var body: some View {
     ZStack {
+      LootaTheme.backgroundGradient
+        .ignoresSafeArea()
+      
       // Show splash screen first
       if showingSplash {
         SplashScreen()
@@ -46,11 +58,14 @@ public struct ContentView: View {
       // Main app content (always present after splash)
       else {
         mainAppContent
-          .disabled(isInitializing || isLoadingLoot) // Disable interaction during loading
+          .disabled(isInitializing || isLoadingLoot || huntDataManager.isFetchingHunt) // Disable interaction during loading
         
         // Loading indicator overlays
         if isInitializing {
           LoadingIndicator(message: "Initializing Hunt...", showProgress: true, subtitle: "Please wait while we prepare your adventure")
+            .transition(.opacity)
+        } else if huntDataManager.isFetchingHunt {
+          LoadingIndicator(message: "Summoning Hunt Map...", showProgress: true, subtitle: "Fetching treasure details from Loota HQ")
             .transition(.opacity)
         } else if isLoadingLoot {
           LoadingIndicator(message: "Loading Loot...", showProgress: true, subtitle: "Joining hunt and preparing AR treasures")
@@ -115,6 +130,7 @@ public struct ContentView: View {
           pinData: $pinData,
           isSummoningActive: $isSummoningActive,
           focusedLootId: $focusedLootId,
+          focusedLootDistance: $focusedLootDistance,
           isDebugMode: $isDebugMode,
           showHorizonLine: $showHorizonLine
         )
@@ -123,93 +139,167 @@ public struct ContentView: View {
         .edgesIgnoringSafeArea(.all)
       } else {
         // Placeholder when AR is not ready or hunt not confirmed
-        Color.gray.edgesIgnoringSafeArea(.all)
-        VStack {
-          if showingHuntConfirmation {
-            Text("Hunt Found!")
-              .foregroundColor(.yellow)
-              .font(.title)
-            Text("Review details and confirm to join")
-              .foregroundColor(.white.opacity(0.7))
-              .font(.body)
-          } else if currentHuntType != nil && !userConfirmedHunt {
-            Text("Hunt Ready")
+        Color.black.opacity(0.65).edgesIgnoringSafeArea(.all)
+        VStack(spacing: 20) {
+          ZStack {
+            Circle()
+              .fill(LootaTheme.accentGradient)
+              .frame(width: 88, height: 88)
+              .shadow(color: LootaTheme.accentGlow.opacity(0.7), radius: 16, x: 0, y: 8)
+            Image(systemName: "sparkles")
+              .font(.system(size: 36, weight: .semibold))
               .foregroundColor(.white)
-              .font(.title)
-            Text("Complete confirmation to start hunting")
-              .foregroundColor(.white.opacity(0.7))
-              .font(.body)
-          } else {
-            Text("Loota Treasure Hunt")
-              .foregroundColor(.white)
-              .font(.title)
-            Text("Scan QR code or enter hunt ID to begin")
-              .foregroundColor(.white.opacity(0.7))
-              .font(.body)
           }
+          
+          VStack(spacing: 8) {
+            if showingHuntConfirmation {
+              Text("Hunt Found!")
+                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .foregroundColor(LootaTheme.highlight)
+              Text("Review the details and confirm to begin your adventure.")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(LootaTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            } else if currentHuntType != nil && !userConfirmedHunt {
+              Text("Hunt Ready")
+                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .foregroundColor(LootaTheme.textPrimary)
+              Text("Complete the quick confirmation to start summoning loot.")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(LootaTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            } else {
+              Text("Loota Treasure Hunt")
+                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .foregroundColor(LootaTheme.textPrimary)
+              Text("Scan a QR code or enter a hunt ID to jump into the action.")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(LootaTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            }
+          }
+          .padding(.top, 8)
 
           // Display current hunt type and data counts for debugging (only in debug mode)
           if isDebugMode {
-            Text("Hunt Type: \(currentHuntType.map { $0.rawValue } ?? "None")")
-              .foregroundColor(.white)
-              .font(.caption)
-            Text("Geolocation Objects: \(objectLocations.count)")
-              .foregroundColor(.white)
-              .font(.caption)
-            Text("Proximity Markers: \(proximityMarkers.count)")
-              .foregroundColor(.white)
-              .font(.caption)
-            Text("User Confirmed: \(userConfirmedHunt ? "Yes" : "No")")
-              .foregroundColor(.white)
-              .font(.caption)
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Debug Snapshots")
+                .font(.caption2.smallCaps())
+                .foregroundStyle(LootaTheme.textSecondary)
+              
+              Text("Hunt Type: \(currentHuntType.map { $0.rawValue } ?? "None")")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textPrimary)
+              Text("Geolocation Objects: \(objectLocations.count)")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textPrimary)
+              Text("Proximity Markers: \(proximityMarkers.count)")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textPrimary)
+              Text("User Confirmed: \(userConfirmedHunt ? "Yes" : "No")")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textPrimary)
+            }
+            .lootaGlassBackground(
+              cornerRadius: 20,
+              padding: EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+            )
           }
         }
+        .lootaGlassBackground()
+        .padding(.horizontal, 36)
       }
 
       // VStack for Heading and Accuracy Display (Top Center) - Debug Mode Only
       if isDebugMode {
         VStack {
-          Text(locationManager.trueHeadingString)
-            .font(.caption)
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(8)
-          Text(locationManager.accuracyString)
-            .font(.caption)
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(8)
+          debugChip(locationManager.trueHeadingString)
+          debugChip(locationManager.accuracyString)
           Spacer()  // Pushes this VStack to the top
         }
         .padding(.top, 10)  // Add some padding from the top edge
         .frame(maxWidth: .infinity, alignment: .center)  // Center horizontally
       }
 
-      // Summoning Button - Bottom Center (always visible when loot is focused)
-      if let focusedId = focusedLootId {
+      // Distance Display - Center of Screen (only when loot is >20ft and focused)
+      if let distance = focusedLootDistance, distance > 6.096 { // 20 feet in meters
         VStack {
           Spacer()
-          
+
+          Text(String(format: "%.2f ft", distance * 3.28084))
+            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .foregroundColor(LootaTheme.highlight)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(
+              RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.6))
+                .overlay(
+                  RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                      LinearGradient(
+                        colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                      ),
+                      lineWidth: 2
+                    )
+                )
+            )
+            .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 12, x: 0, y: 4)
+
+          Spacer()
+        }
+        .frame(maxWidth: .infinity)
+      }
+
+      // Summoning Button - Bottom Center (always visible when loot is focused)
+      if let focusedId = focusedLootId {
+        let shortId = String(focusedId.suffix(4)).uppercased()
+        VStack {
+          Spacer()
+
           VStack(spacing: 8) {
             // Circular Summoning Button
             Button(action: {}) {
-              HStack(spacing: 2) {
-                Text("🫳")
-                  .font(.system(size: 18))
-                  .rotationEffect(.degrees(-90)) // Rotate 90 degrees counter-clockwise (wrist down, thumb to inside)
-                Text("🫴")
-                  .font(.system(size: 18))
-                  .rotationEffect(.degrees(-90)) // Rotate 90 degrees counter-clockwise (wrist down, thumb to inside)
+              ZStack {
+                Circle()
+                  .strokeBorder(
+                    LinearGradient(
+                      colors: [LootaTheme.neonCyan.opacity(0.8), LootaTheme.cosmicPurple.opacity(0.8)],
+                      startPoint: .topLeading,
+                      endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 3
+                  )
+                  .frame(width: 104, height: 104)
+                  .overlay(
+                    Circle()
+                      .strokeBorder(Color.white.opacity(isSummoningActive ? 0.7 : 0.25), lineWidth: 1)
+                      .blur(radius: 2)
+                  )
+
+                Circle()
+                  .fill(
+                    RadialGradient(
+                      gradient: Gradient(colors: [
+                        isSummoningActive ? LootaTheme.neonCyan.opacity(0.9) : Color.white.opacity(0.15),
+                        LootaTheme.cosmicPurple.opacity(0.85)
+                      ]),
+                      center: .center,
+                      startRadius: 2,
+                      endRadius: 120
+                    )
+                  )
+                  .frame(width: 96, height: 96)
+                  .shadow(color: LootaTheme.accentGlow.opacity(isSummoningActive ? 0.8 : 0.4), radius: isSummoningActive ? 24 : 10, x: 0, y: 8)
+
+                Image(systemName: isSummoningActive ? "waveform.path.ecg" : "wand.and.stars")
+                  .font(.system(size: 32, weight: .semibold, design: .rounded))
+                  .foregroundColor(.white)
+                  .scaleEffect(isSummoningActive ? 1.08 : 1.0)
+                  .animation(.easeInOut(duration: 0.3), value: isSummoningActive)
               }
-              .foregroundColor(.white)
-              .frame(width: 80, height: 80)
-              .background(isSummoningActive ? Color.green : Color.blue)
-              .clipShape(Circle())
-              .shadow(color: isSummoningActive ? .green : .blue, radius: isSummoningActive ? 12 : 6)
             }
             .scaleEffect(isSummoningActive ? 1.1 : 1.0)
             .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
@@ -217,14 +307,26 @@ public struct ContentView: View {
             }) {
               // Long press ended
             }
-            
-            Text("Summon Loot")
-              .font(.caption)
-              .foregroundColor(.cyan)
-              .padding(.horizontal, 12)
-              .padding(.vertical, 4)
-              .background(Color.black.opacity(0.7))
-              .cornerRadius(8)
+            .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSummoningActive)
+
+            VStack(spacing: 4) {
+              Text("Hold to Summon")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(LootaTheme.textPrimary)
+              Text("Focus ID · \(shortId)")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textSecondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(
+                  Capsule()
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                      Capsule()
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                )
+            }
           }
           .padding(.bottom, 100) // Above bottom edge but below debug panel
         }
@@ -235,187 +337,229 @@ public struct ContentView: View {
       VStack {
         HStack(alignment: .top) {  // Top Row: Counter and Object Type Display
           // Animated counter in top left
-          ZStack {
-            Text("\(coinsCollected)")
-              .font(.system(size: 36, weight: .heavy, design: .rounded))
-              .foregroundColor(.yellow)
-              .padding(.horizontal, 20)
-              .padding(.vertical, 10)
-              .background(
-                LinearGradient(
-                  gradient: Gradient(colors: [Color.yellow.opacity(0.9), Color.orange.opacity(0.7)]
-                  ),
-                  startPoint: .topLeading,
-                  endPoint: .bottomTrailing
-                )
-              )
-              .cornerRadius(16)
-              .shadow(color: .yellow.opacity(0.7), radius: animate ? 16 : 4)
-              .scaleEffect(animate ? 1.4 : 1.0)
-              .opacity(animate ? 1.0 : 0.85)
-              .animation(.spring(response: 0.4, dampingFraction: 0.5), value: animate)
+          HStack(alignment: .center, spacing: 14) {
+            ZStack {
+              Circle()
+                .fill(LootaTheme.accentGradient)
+                .frame(width: 54, height: 54)
+                .shadow(color: LootaTheme.scoreGlow(for: animate), radius: animate ? 18 : 8, x: 0, y: 6)
+              Image(systemName: "diamond.fill")
+                .font(.system(size: 26, weight: .medium))
+                .foregroundColor(.white)
+                .rotationEffect(.degrees(12))
+            }
+            .scaleEffect(animate ? 1.15 : 1.0)
+            .animation(.spring(response: 0.4, dampingFraction: 0.55), value: animate)
+            
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Loot Collected")
+                .font(.caption)
+                .foregroundColor(LootaTheme.textSecondary)
+                .textCase(.uppercase)
+              
+              Text("\(coinsCollected)")
+                .font(.system(size: 36, weight: .heavy, design: .rounded))
+                .foregroundColor(LootaTheme.highlight)
+                .shadow(color: LootaTheme.scoreGlow(for: animate), radius: animate ? 14 : 4, x: 0, y: 0)
+                .scaleEffect(animate ? 1.2 : 1.0)
+                .animation(.spring(response: 0.4, dampingFraction: 0.5), value: animate)
+            }
           }
+          .lootaGlassBackground(
+            cornerRadius: 28,
+            padding: EdgeInsets(top: 14, leading: 18, bottom: 14, trailing: 22)
+          )
           .padding([.top, .leading], 16)
 
-          Spacer()  // Pushes object type text to the right
+          Spacer()  // Pushes coin count to the right
 
-          // Debug toggle and Loot type display
-          VStack(alignment: .trailing) {
-            // Top row with debug toggle and gesture help
+          // Remaining loot count display
+          VStack(alignment: .trailing, spacing: 4) {
+            Text("Remaining Loot")
+              .font(.caption2.smallCaps())
+              .foregroundColor(LootaTheme.textSecondary)
             HStack(spacing: 8) {
-              
-              // Debug toggle button
-              Button(action: {
-                isDebugMode.toggle()
-              }) {
-                Text(isDebugMode ? "🐛 DEBUG" : "🎮 PLAY")
-                  .font(.caption)
-                  .fontWeight(.bold)
-                  .foregroundColor(.white)
-                  .padding(.horizontal, 8)
-                  .padding(.vertical, 4)
-                  .background(isDebugMode ? Color.orange.opacity(0.9) : Color.black.opacity(0.8))
-                  .cornerRadius(8)
-                  .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 1)
-              }
+              Text("\(remainingLootCount)")
+                .font(.headline.weight(.bold))
+                .foregroundColor(LootaTheme.highlight)
+              Text("Coins")
+                .font(.headline.weight(.bold))
+                .foregroundColor(LootaTheme.highlight)
             }
-            
-            // Text displaying selected loot type
-            Text("Loot:")
-              .font(.caption)
-              .foregroundColor(.white)
-            Text(selectedObject.rawValue)
-              .font(.headline)
-              .foregroundColor(.yellow)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+              Capsule()
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                  Capsule()
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+            )
           }
+          .lootaGlassBackground(
+            cornerRadius: 26,
+            padding: EdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18)
+          )
           .padding([.top, .trailing], 16)
         }
 
-        Spacer()  // Pushes location display to bottom/right
+        Spacer()  // Pushes debug button to bottom
+
+        // Debug mode toggle button - Lower Left
+        HStack {
+          Button(action: {
+            isDebugMode.toggle()
+          }) {
+            HStack(spacing: 8) {
+              Image(systemName: "wrench.and.screwdriver")
+                .font(.caption)
+              Text(isDebugMode ? "Debug Mode" : "Play Mode")
+                .font(.caption.weight(.semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .background(
+              Capsule()
+                .fill(
+                  LinearGradient(
+                    colors: isDebugMode
+                      ? [LootaTheme.warning, LootaTheme.cosmicPurple]
+                      : [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                  )
+                )
+            )
+            .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 6)
+          }
+          .padding([.bottom, .leading], 16)
+
+          Spacer()
+        }
 
         // Debug Information Panel - Only show in debug mode
         if isDebugMode {
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Your Location:")
-              .font(.headline)
-              .foregroundColor(.white)
-            Text(String(format: "%.6f", currentLocation?.latitude ?? 0))
-              .font(.caption.monospacedDigit())
-              .foregroundColor(.white)
-            Text(String(format: "%.6f", currentLocation?.longitude ?? 0))
-              .font(.caption.monospacedDigit())
-              .foregroundColor(.white)
+          let errorMessage = (huntDataManager.errorMessage ?? statusMessage)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+          let joinMessage = huntDataManager.joinStatusMessage?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Display User Name
-            Text("User Name: \(huntDataManager.userName ?? "N/A")")
-              .font(.caption)
-              .foregroundColor(.white)
-
-            Divider()
-              .background(Color.white)
-              .padding(.vertical, 4)
-
-            // Display info based on hunt type
-            if currentHuntType == .geolocation {
-            Text("Geolocation Objects (\(objectLocations.count)):")
-              .font(.headline)
-              .foregroundColor(.white)
-            if let firstLocation = objectLocations.first {
-              Text(String(format: "%.6f", firstLocation.latitude))
-                .font(.caption.monospacedDigit())
-                .foregroundColor(.yellow)
-              Text(String(format: "%.6f", firstLocation.longitude))
-                .font(.caption.monospacedDigit())
-                .foregroundColor(.yellow)
-            } else {
-              Text("N/A")
-                .font(.caption.monospacedDigit())
-                .foregroundColor(.yellow)
-            }
-          } else if currentHuntType == .proximity {
-            Text("Proximity Markers (\(proximityMarkers.count)):")
-              .font(.headline)
-              .foregroundColor(.white)
-            // Optionally display info about the first proximity marker
-            if let firstMarker = proximityMarkers.first {
-              Text("Dist: \(String(format: "%.1f", firstMarker.dist))m, Dir: \(firstMarker.dir)")
-                .font(.caption.monospacedDigit())
-                .foregroundColor(.yellow)
-            } else {
-              Text("N/A")
-                .font(.caption.monospacedDigit())
-                .foregroundColor(.yellow)
-            }
-          } else {
-            Text("No Hunt Data Loaded")
-              .font(.headline)
-              .foregroundColor(.white)
-          }
-
-          Divider()
-            .background(Color.white)
-            .padding(.vertical, 4)
-
-          // Horizon line toggle
-          Button(action: {
-            showHorizonLine.toggle()
-          }) {
-            HStack {
-              Image(systemName: showHorizonLine ? "minus.circle.fill" : "plus.circle.fill")
-                .foregroundColor(showHorizonLine ? .orange : .cyan)
-              Text("Horizon Line")
-                .foregroundColor(.white)
-              Spacer()
-              Text(showHorizonLine ? "ON" : "OFF")
+          VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Explorer Status")
+                .font(.caption.smallCaps())
+                .foregroundColor(LootaTheme.textSecondary)
+              HStack(spacing: 12) {
+                debugChip(String(format: "%.6f", currentLocation?.latitude ?? 0))
+                debugChip(String(format: "%.6f", currentLocation?.longitude ?? 0))
+              }
+              Text("User: \(huntDataManager.userName ?? "N/A")")
                 .font(.caption)
-                .fontWeight(.bold)
-                .foregroundColor(showHorizonLine ? .orange : .gray)
+                .foregroundColor(LootaTheme.textMuted)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.3))
-            .cornerRadius(8)
-          }
 
-          // Status message display (errors)
-          Text(huntDataManager.errorMessage ?? statusMessage)
-            .font(.headline)
-            .foregroundColor(.red)
-            .padding(.top, 8)
+            dividerLine
 
-          // Join status message display (success messages)
-          if let joinMessage = huntDataManager.joinStatusMessage {
-            Text(joinMessage)
-              .font(.headline)
-              .foregroundColor(.green)
-              .padding(.top, 4)
-          }
+            if currentHuntType == .geolocation {
+              VStack(alignment: .leading, spacing: 6) {
+                Text("Geolocation Loot (\(objectLocations.count))")
+                  .font(.caption.smallCaps())
+                  .foregroundColor(LootaTheme.textSecondary)
+                if let firstLocation = objectLocations.first {
+                  debugChip(String(format: "%.6f", firstLocation.latitude))
+                  debugChip(String(format: "%.6f", firstLocation.longitude))
+                } else {
+                  debugChip("Awaiting coordinates")
+                }
+              }
+            } else if currentHuntType == .proximity {
+              VStack(alignment: .leading, spacing: 6) {
+                Text("Proximity Markers (\(proximityMarkers.count))")
+                  .font(.caption.smallCaps())
+                  .foregroundColor(LootaTheme.textSecondary)
+                if let firstMarker = proximityMarkers.first {
+                  debugChip("Dist \(String(format: "%.1f", firstMarker.dist)) m")
+                  debugChip("Dir \(firstMarker.dir)")
+                } else {
+                  debugChip("Awaiting marker data")
+                }
+              }
+            } else {
+              Text("No hunt data loaded yet.")
+                .font(.caption)
+                .foregroundColor(LootaTheme.textMuted)
+            }
 
-          // On-screen debug indicators
-          if currentHuntType != nil {
-            Text("Data Fetched: YES")
-              .font(.caption)
-              .foregroundColor(.green)
-          } else {
-            Text("Data Fetched: NO")
-              .font(.caption)
-              .foregroundColor(.red)
-          }
+            dividerLine
 
-          if currentHuntType == .geolocation {
-            Text("Parsed Objects: \(objectLocations.count)")
-              .font(.caption)
-              .foregroundColor(.green)
-          } else if currentHuntType == .proximity {
-            Text("Parsed Markers: \(proximityMarkers.count)")
-              .font(.caption)
-              .foregroundColor(.green)
+            Button(action: {
+              showHorizonLine.toggle()
+            }) {
+              HStack(spacing: 12) {
+                Image(systemName: showHorizonLine ? "minus.circle.fill" : "plus.circle.fill")
+                  .foregroundColor(showHorizonLine ? LootaTheme.warning : LootaTheme.neonCyan)
+                  .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("Horizon Line")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(LootaTheme.textPrimary)
+                  Text(showHorizonLine ? "Visible" : "Hidden")
+                    .font(.caption)
+                    .foregroundColor(showHorizonLine ? LootaTheme.warning : LootaTheme.textSecondary)
+                }
+                Spacer()
+              }
+              .padding(.vertical, 10)
+              .padding(.horizontal, 12)
+              .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                  .fill(Color.white.opacity(0.08))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                  )
+              )
+            }
+
+            if !errorMessage.isEmpty {
+              HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                  .foregroundColor(.red.opacity(0.8))
+                Text(errorMessage)
+                  .font(.footnote.weight(.semibold))
+                  .foregroundColor(.red.opacity(0.9))
+              }
+              .padding(.vertical, 8)
+            }
+
+            if let joinMessage, !joinMessage.isEmpty {
+              HStack(spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                  .foregroundColor(LootaTheme.success)
+                Text(joinMessage)
+                  .font(.footnote.weight(.semibold))
+                  .foregroundColor(LootaTheme.success)
+              }
+              .padding(.vertical, 6)
+            }
+
+            HStack(spacing: 12) {
+              debugChip("Fetched: \(currentHuntType != nil ? "YES" : "NO")")
+              if currentHuntType == .geolocation {
+                debugChip("Objects: \(objectLocations.count)")
+              } else if currentHuntType == .proximity {
+                debugChip("Markers: \(proximityMarkers.count)")
+              }
+            }
           }
-          }
-          .padding()
-          .background(Color.black.opacity(0.6))
-          .cornerRadius(10)
-          .padding()
+          .lootaGlassBackground(
+            cornerRadius: 30,
+            padding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)
+          )
+          .padding(.horizontal, 16)
+          .padding(.bottom, 24)
         }
       }
       
@@ -629,6 +773,28 @@ public struct ContentView: View {
     }
   }
 
+  private func debugChip(_ text: String) -> some View {
+    Text(text)
+      .font(.caption.monospacedDigit())
+      .foregroundColor(LootaTheme.textPrimary)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 6)
+      .background(
+        Capsule()
+          .fill(Color.white.opacity(0.08))
+          .overlay(
+            Capsule()
+              .stroke(Color.white.opacity(0.18), lineWidth: 1)
+          )
+      )
+  }
+
+  private var dividerLine: some View {
+    Rectangle()
+      .fill(Color.white.opacity(0.12))
+      .frame(height: 1)
+  }
+
   // Method to load hunt data from HuntDataManager
   private func loadHuntData(_ huntData: HuntData) {
     print(
@@ -717,4 +883,3 @@ public struct ContentView: View {
     }
   }
 }
-

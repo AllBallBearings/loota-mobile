@@ -17,39 +17,58 @@ struct LoadingIndicator: View {
     var body: some View {
         ZStack {
             // Semi-transparent background
-            Color.black.opacity(0.7)
+            LootaTheme.backgroundGradient
+                .ignoresSafeArea()
+                .overlay(Color.black.opacity(0.55))
                 .ignoresSafeArea()
             
             VStack(spacing: 24) {
                 // Spinner or progress indicator
                 if showProgress {
                     ZStack {
-                        // Outer ring
                         Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 4)
-                            .frame(width: 60, height: 60)
+                            .strokeBorder(Color.white.opacity(0.15), lineWidth: 3)
+                            .frame(width: 72, height: 72)
                         
-                        // Animated ring
                         Circle()
-                            .trim(from: 0, to: 0.75)
+                            .trim(from: 0.08, to: 0.92)
                             .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [.purple, .white, .purple]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                AngularGradient(
+                                    gradient: Gradient(colors: [
+                                        LootaTheme.neonCyan,
+                                        LootaTheme.cosmicPurple,
+                                        LootaTheme.highlight,
+                                        LootaTheme.neonCyan
+                                    ]),
+                                    center: .center
                                 ),
-                                style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                style: StrokeStyle(lineWidth: 5, lineCap: .round)
                             )
-                            .frame(width: 60, height: 60)
+                            .frame(width: 72, height: 72)
                             .rotationEffect(.degrees(rotationAngle))
-                            .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: rotationAngle)
+                        
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    gradient: Gradient(colors: [
+                                        LootaTheme.cosmicPurple.opacity(0.5),
+                                        Color.clear
+                                    ]),
+                                    center: .center,
+                                    startRadius: 4,
+                                    endRadius: 36
+                                )
+                            )
+                            .frame(width: 54, height: 54)
                     }
+                    .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 16, x: 0, y: 6)
+                    .animation(.linear(duration: 1.1).repeatForever(autoreverses: false), value: rotationAngle)
                 }
                 
                 // Loading message
                 Text(message)
                     .font(.system(size: 18, weight: .medium, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(LootaTheme.textPrimary)
                     .multilineTextAlignment(.center)
                     .opacity(isAnimating ? 1.0 : 0.6)
                     .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAnimating)
@@ -58,11 +77,14 @@ struct LoadingIndicator: View {
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(LootaTheme.textSecondary)
                         .multilineTextAlignment(.center)
                 }
             }
-            .padding(.horizontal, 40)
+            .lootaGlassBackground(
+                cornerRadius: 32,
+                padding: EdgeInsets(top: 28, leading: 32, bottom: 28, trailing: 32)
+            )
         }
         .onAppear {
             withAnimation {

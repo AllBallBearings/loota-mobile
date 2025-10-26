@@ -10,6 +10,7 @@ public class HuntDataManager: ObservableObject {
   @Published public var huntData: HuntData?
   @Published public var errorMessage: String?
   @Published public var joinStatusMessage: String?
+  @Published public var isFetchingHunt: Bool = false
   @Published public var showCompletionScreen: Bool = false
   @AppStorage("userId") public var userId: String?
   @AppStorage("userName") public var userName: String?
@@ -204,6 +205,9 @@ public class HuntDataManager: ObservableObject {
     // Clear any previous status messages
     self.joinStatusMessage = nil
     self.errorMessage = nil
+    DispatchQueue.main.async {
+      self.isFetchingHunt = true
+    }
 
     if lastHuntId != huntId {
         clearCollectedPins()
@@ -310,6 +314,7 @@ public class HuntDataManager: ObservableObject {
           print("DEBUG: HuntDataManager - proceedWithHuntFetch: After filtering collected pins, \(data.pins.count) pins remain")
           
           self.huntData = data
+          self.isFetchingHunt = false
           
           // Check if the current user is already a participant and extract their phone
           if let currentUserId = self.userId {
@@ -330,6 +335,7 @@ public class HuntDataManager: ObservableObject {
         case .failure(let error):
           self.errorMessage = error.localizedDescription
           self.joinStatusMessage = nil  // Clear any join messages on error
+          self.isFetchingHunt = false
         }
       }
     }
