@@ -11,60 +11,116 @@ struct HuntCompletionView: View {
     
     var body: some View {
         ZStack {
-            // Background
-            Color.black.opacity(0.9)
-                .edgesIgnoringSafeArea(.all)
+            LootaTheme.backgroundGradient
+                .ignoresSafeArea()
+            RadialGradient(
+                gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]),
+                center: .center,
+                startRadius: 80,
+                endRadius: 480
+            )
+            .blendMode(.screen)
+            .ignoresSafeArea()
             
-            VStack(spacing: 24) {
-                // Celebration header
-                VStack(spacing: 12) {
-                    Text("🎉")
-                        .font(.system(size: 80))
+            VStack(spacing: 28) {
+                VStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .strokeBorder(
+                                AngularGradient(
+                                    gradient: Gradient(colors: [
+                                        LootaTheme.neonCyan,
+                                        LootaTheme.cosmicPurple,
+                                        LootaTheme.highlight,
+                                        LootaTheme.neonCyan
+                                    ]),
+                                    center: .center
+                                ),
+                                lineWidth: 6
+                            )
+                            .frame(width: 116, height: 116)
+                            .shadow(color: LootaTheme.accentGlow.opacity(0.45), radius: 18, x: 0, y: 10)
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [Color.white.opacity(0.18), Color.clear],
+                                    center: .center,
+                                    startRadius: 6,
+                                    endRadius: 84
+                                )
+                            )
+                            .frame(width: 98, height: 98)
+                        Text("🎉")
+                            .font(.system(size: 64))
+                    }
                     
                     Text("Totally Looted!")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.yellow)
+                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .foregroundColor(LootaTheme.highlight)
                     
                     if isWinner {
                         Text("Congratulations! You won!")
-                            .font(.title2)
-                            .foregroundColor(.green)
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .foregroundColor(LootaTheme.success)
                     } else {
                         Text("Hunt Complete")
-                            .font(.title2)
-                            .foregroundColor(.blue)
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .foregroundColor(LootaTheme.neonCyan)
                     }
                 }
+                .multilineTextAlignment(.center)
                 
-                // Winner information
                 if isWinner {
                     WinnerContactCard(creatorContact: huntData.creatorContact)
                 } else {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 10) {
                         Text("Better luck next time!")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .foregroundColor(LootaTheme.textSecondary)
                         
                         if let winnerId = huntData.winnerId {
                             Text("Winner: \(winnerId)")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(LootaTheme.textMuted)
                         }
                     }
-                    .padding()
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(12)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            )
+                    )
                 }
                 
-                Button("Back to Hunts") {
+                Button(action: {
                     isPresented = false
+                }) {
+                    Text("Back to Hunts")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 34)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(22)
+                        .shadow(color: LootaTheme.cosmicPurple.opacity(0.4), radius: 14, x: 0, y: 10)
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.top, 20)
+                .padding(.top, 8)
             }
-            .padding()
-            .multilineTextAlignment(.center)
+            .lootaGlassBackground(
+                cornerRadius: 36,
+                padding: EdgeInsets(top: 32, leading: 30, bottom: 34, trailing: 30)
+            )
+            .padding(.horizontal, 24)
         }
     }
 }
@@ -73,141 +129,99 @@ struct WinnerContactCard: View {
     let creatorContact: CreatorContact?
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 18) {
             VStack(spacing: 8) {
                 Text("Contact Hunt Creator")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(LootaTheme.textPrimary)
                 
                 Text("Reach out to collect your prize!")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(LootaTheme.textSecondary)
             }
             
             if let contact = creatorContact {
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     if let name = contact.name {
                         Text("Creator: \(name)")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(LootaTheme.textPrimary)
                     }
                     
-                    // Show contact options based on creator's preference
                     if contact.preferred == "phone", let phone = contact.phone {
-                        HStack(spacing: 12) {
-                            Button(action: { 
-                                UIApplication.makePhoneCall(phone) 
-                            }) {
-                                Label("Call", systemImage: "phone.fill")
-                                    .font(.subheadline)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(Color.green)
-                                    .cornerRadius(8)
-                            }
-                            
-                            Button(action: { 
-                                UIApplication.sendText(phone) 
-                            }) {
-                                Label("Text", systemImage: "message.fill")
-                                    .font(.subheadline)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(Color.blue)
-                                    .cornerRadius(8)
-                            }
-                        }
-                        
-                        Text("Phone: \(phone.formattedPhoneNumber())")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                        phoneActions(phone: phone)
                     }
                     
                     if contact.preferred == "email", let email = contact.email {
-                        Button(action: { 
-                            UIApplication.sendEmail(email) 
-                        }) {
-                            Label("Email", systemImage: "envelope.fill")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.orange)
-                                .cornerRadius(8)
-                        }
-                        
-                        Text("Email: \(email)")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                        emailAction(email: email)
                     }
                     
-                    // Show both contact methods if no preference specified
                     if contact.preferred == nil {
-                        VStack(spacing: 8) {
-                            if let phone = contact.phone {
-                                HStack(spacing: 12) {
-                                    Button(action: { 
-                                        UIApplication.makePhoneCall(phone) 
-                                    }) {
-                                        Label("Call", systemImage: "phone.fill")
-                                            .font(.subheadline)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 8)
-                                            .background(Color.green)
-                                            .cornerRadius(8)
-                                    }
-                                    
-                                    Button(action: { 
-                                        UIApplication.sendText(phone) 
-                                    }) {
-                                        Label("Text", systemImage: "message.fill")
-                                            .font(.subheadline)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 8)
-                                            .background(Color.blue)
-                                            .cornerRadius(8)
-                                    }
-                                }
-                                
-                                Text("Phone: \(phone.formattedPhoneNumber())")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            if let email = contact.email {
-                                Button(action: { 
-                                    UIApplication.sendEmail(email) 
-                                }) {
-                                    Label("Email", systemImage: "envelope.fill")
-                                        .font(.subheadline)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(Color.orange)
-                                        .cornerRadius(8)
-                                }
-                                
-                                Text("Email: \(email)")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
+                        if let phone = contact.phone {
+                            phoneActions(phone: phone)
+                        }
+                        if let email = contact.email {
+                            emailAction(email: email)
                         }
                     }
                 }
             } else {
                 Text("Creator contact information not available")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(.red.opacity(0.8))
             }
         }
-        .padding()
-        .background(Color.green.opacity(0.1))
-        .cornerRadius(12)
+        .padding(.vertical, 22)
+        .padding(.horizontal, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                )
+        )
+    }
+    
+    @ViewBuilder
+    private func phoneActions(phone: String) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                ContactActionButton(
+                    title: "Call",
+                    systemImage: "phone.fill",
+                    colors: [LootaTheme.success, LootaTheme.neonCyan],
+                    action: { UIApplication.makePhoneCall(phone) }
+                )
+                
+                ContactActionButton(
+                    title: "Text",
+                    systemImage: "message.fill",
+                    colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
+                    action: { UIApplication.sendText(phone) }
+                )
+            }
+            
+            Text("Phone: \(phone.formattedPhoneNumber())")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textMuted)
+        }
+    }
+    
+    @ViewBuilder
+    private func emailAction(email: String) -> some View {
+        VStack(spacing: 6) {
+            ContactActionButton(
+                title: "Email",
+                systemImage: "envelope.fill",
+                colors: [LootaTheme.warning, LootaTheme.cosmicPurple],
+                action: { UIApplication.sendEmail(email) }
+            )
+            
+            Text("Email: \(email)")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(LootaTheme.textMuted)
+        }
     }
 }
 
@@ -220,48 +234,71 @@ struct JoinHuntView: View {
     @ObservedObject private var huntDataManager = HuntDataManager.shared
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Hunt details
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Hunt ID: \(huntData.id)")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(LootaTheme.textPrimary)
                 
                 Text("\(huntData.pins.count) treasures to find")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(LootaTheme.textSecondary)
             }
-            .padding()
-            .background(Color.gray.opacity(0.2))
-            .cornerRadius(12)
+            .lootaGlassBackground(
+                cornerRadius: 26,
+                padding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)
+            )
             
-            // Phone number input
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Phone Number Required")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundColor(LootaTheme.textPrimary)
                 
                 Text("Your phone number is needed for Apple Pay prize transfers")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(LootaTheme.textSecondary)
                 
                 TextField("(555) 123-4567", text: $participantPhone)
-                    .textFieldStyle(.roundedBorder)
                     .keyboardType(.phonePad)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                    )
+                    .foregroundColor(LootaTheme.textPrimary)
                     .onChange(of: participantPhone) { _, newValue in
-                        // Auto-format phone number as user types
                         participantPhone = newValue.formattedPhoneNumber()
                     }
             }
-            .padding()
-            .background(Color.blue.opacity(0.1))
-            .cornerRadius(12)
+            .lootaGlassBackground(
+                cornerRadius: 26,
+                padding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)
+            )
             
-            Button("Join Hunt") {
+            Button(action: {
                 joinHunt()
+            }) {
+                Text(isJoining ? "Joining Hunt..." : "Join Hunt")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(20)
+                    .shadow(color: LootaTheme.neonCyan.opacity(0.3), radius: 12, x: 0, y: 8)
             }
             .disabled(participantPhone.isEmpty || !participantPhone.isValidPhoneNumber() || isJoining)
-            .buttonStyle(.borderedProminent)
             .opacity((participantPhone.isEmpty || !participantPhone.isValidPhoneNumber() || isJoining) ? 0.6 : 1.0)
             
             if isJoining {
@@ -287,14 +324,12 @@ struct JoinHuntView: View {
         
         huntDataManager.joinHunt(huntId: huntData.id, phoneNumber: participantPhone)
         
-        // Monitor join status
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             if let error = huntDataManager.errorMessage {
                 showError(message: error)
                 isJoining = false
             } else if huntDataManager.joinStatusMessage != nil {
                 isJoining = false
-                // Success - hunt joined
             }
         }
     }
@@ -302,6 +337,33 @@ struct JoinHuntView: View {
     private func showError(message: String) {
         errorMessage = message
         showError = true
+    }
+}
+
+private struct ContactActionButton: View {
+    let title: String
+    let systemImage: String
+    let colors: [Color]
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: colors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                )
+        }
     }
 }
 

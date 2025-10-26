@@ -27,6 +27,7 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var pinData: [PinData]
   @Binding public var isSummoningActive: Bool
   @Binding public var focusedLootId: String?
+  @Binding public var focusedLootDistance: Float?
   @Binding public var isDebugMode: Bool
   @Binding public var showHorizonLine: Bool
 
@@ -42,6 +43,7 @@ public struct ARViewContainer: UIViewRepresentable {
     pinData: Binding<[PinData]>,
     isSummoningActive: Binding<Bool>,
     focusedLootId: Binding<String?>,
+    focusedLootDistance: Binding<Float?>,
     isDebugMode: Binding<Bool>,
     showHorizonLine: Binding<Bool>
   ) {
@@ -59,6 +61,7 @@ public struct ARViewContainer: UIViewRepresentable {
     self._pinData = pinData
     self._isSummoningActive = isSummoningActive
     self._focusedLootId = focusedLootId
+    self._focusedLootDistance = focusedLootDistance
     self._isDebugMode = isDebugMode
     self._showHorizonLine = showHorizonLine
   }
@@ -182,6 +185,7 @@ public struct ARViewContainer: UIViewRepresentable {
       pinData: $pinData,
       isSummoningActive: $isSummoningActive,
       focusedLootId: $focusedLootId,
+      focusedLootDistance: $focusedLootDistance,
       isDebugMode: $isDebugMode,
       showHorizonLine: $showHorizonLine
     )
@@ -207,6 +211,7 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var pinData: [PinData]
     @Binding public var isSummoningActiveBinding: Bool
     @Binding public var focusedLootIdBinding: String?
+    @Binding public var focusedLootDistanceBinding: Float?
     @Binding public var isDebugMode: Bool
     @Binding public var showHorizonLineBinding: Bool
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
@@ -282,7 +287,8 @@ public struct ARViewContainer: UIViewRepresentable {
       proximityMarkers: Binding<[ProximityMarkerData]>,
       pinData: Binding<[PinData]>,
       isSummoningActive: Binding<Bool>,
-    focusedLootId: Binding<String?>,
+      focusedLootId: Binding<String?>,
+      focusedLootDistance: Binding<Float?>,
       isDebugMode: Binding<Bool>,
       showHorizonLine: Binding<Bool>
     ) {
@@ -296,6 +302,7 @@ public struct ARViewContainer: UIViewRepresentable {
       self._pinData = pinData
       self._isSummoningActiveBinding = isSummoningActive
       self._focusedLootIdBinding = focusedLootId
+      self._focusedLootDistanceBinding = focusedLootDistance
       self._isDebugMode = isDebugMode
       self._showHorizonLineBinding = showHorizonLine
 
@@ -411,13 +418,14 @@ public struct ARViewContainer: UIViewRepresentable {
           self.entityToPinId[entity] = pinId
           self.coinEntities.append(entity)
 
-          // Add marker number label
-          let numberLabel = createLabelEntity(text: "\(markerNumber)")
-          numberLabel.position = [0, 0.25, 0]  // Higher position for number
-          objectAnchor.addChild(numberLabel)
-
-          // Add ID label only in debug mode
+          // Add labels only in debug mode
           if self.isDebugMode {
+            // Add marker number label
+            let numberLabel = createLabelEntity(text: "\(markerNumber)")
+            numberLabel.position = [0, 0.25, 0]  // Higher position for number
+            objectAnchor.addChild(numberLabel)
+
+            // Add ID label
             let idLabel = createLabelEntity(text: String(shortId))
             idLabel.position = [0, 0.1, 0]  // Lower position for ID
             objectAnchor.addChild(idLabel)
@@ -525,13 +533,14 @@ public struct ARViewContainer: UIViewRepresentable {
           self.entityToPinId[entity] = pinId
           self.coinEntities.append(entity)
 
-          // Add marker number label
-          let numberLabel = createLabelEntity(text: "\(markerNumber)")
-          numberLabel.position = [0, 0.25, 0]  // Higher position for number
-          objectAnchor.addChild(numberLabel)
-
-          // Add ID label only in debug mode
+          // Add labels only in debug mode
           if self.isDebugMode {
+            // Add marker number label
+            let numberLabel = createLabelEntity(text: "\(markerNumber)")
+            numberLabel.position = [0, 0.25, 0]  // Higher position for number
+            objectAnchor.addChild(numberLabel)
+
+            // Add ID label
             let idLabel = createLabelEntity(text: String(shortId))
             idLabel.position = [0, 0.1, 0]  // Lower position for ID
             objectAnchor.addChild(idLabel)
@@ -1189,6 +1198,11 @@ public struct ARViewContainer: UIViewRepresentable {
         audioPlayer = try AVAudioPlayer(contentsOf: url)
         audioPlayer?.prepareToPlay()
         audioPlayer?.play()
+
+        // Add haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        print("🔊 HAPTIC: Played haptic feedback for coin collection")
       } catch {
         print("Failed to play coin sound: \(error)")
       }
@@ -1255,9 +1269,11 @@ public struct ARViewContainer: UIViewRepresentable {
       // Update focused entity and binding
       let previousFocusedEntity = focusedEntity
       focusedEntity = centerEntity
-      
+
       if let entity = centerEntity, let pinId = entityToPinId[entity] {
         focusedLootIdBinding = pinId
+        // Update distance to focused loot
+        focusedLootDistanceBinding = closestDistance
         // Add glow effect if newly focused
         if previousFocusedEntity != centerEntity {
           // Remove glow from previously focused entity
@@ -1269,6 +1285,7 @@ public struct ARViewContainer: UIViewRepresentable {
         }
       } else {
         focusedLootIdBinding = nil
+        focusedLootDistanceBinding = nil
         // Remove glow effect if focus lost
         if let previousEntity = previousFocusedEntity {
           removeGlowEffect(from: previousEntity)
