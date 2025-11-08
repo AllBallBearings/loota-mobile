@@ -23,6 +23,7 @@ public struct PinData: Codable {
   public let createdAt: String?
   public let collectedByUserId: String?
   public let collectedAt: String?
+  public let objectType: ARObjectType?  // Loot type (coin, giftCard, dollarSign)
 
   // Custom initializer to handle flexible lat/lng decoding (String or Double)
   public init(from decoder: Decoder) throws {
@@ -55,6 +56,7 @@ public struct PinData: Codable {
     createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     collectedByUserId = try container.decodeIfPresent(String.self, forKey: .collectedByUserId)
     collectedAt = try container.decodeIfPresent(String.self, forKey: .collectedAt)
+    objectType = try container.decodeIfPresent(ARObjectType.self, forKey: .objectType)
   }
 
   // Manual encoding if needed, or rely on default if only decoding is custom
@@ -72,11 +74,12 @@ public struct PinData: Codable {
     try container.encodeIfPresent(createdAt, forKey: .createdAt)
     try container.encodeIfPresent(collectedByUserId, forKey: .collectedByUserId)
     try container.encodeIfPresent(collectedAt, forKey: .collectedAt)
+    try container.encodeIfPresent(objectType, forKey: .objectType)
   }
 
   // Define CodingKeys for all properties
   private enum CodingKeys: String, CodingKey {
-    case id, huntId, lat, lng, distanceFt, directionStr, x, y, order, createdAt, collectedByUserId, collectedAt
+    case id, huntId, lat, lng, distanceFt, directionStr, x, y, order, createdAt, collectedByUserId, collectedAt, objectType
   }
 }
 
