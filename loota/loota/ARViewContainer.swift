@@ -602,7 +602,7 @@ public struct ARViewContainer: UIViewRepresentable {
     private func createEntity(for type: ARObjectType) -> ModelEntity? {
       switch type {
       case .coin:
-        return CoinEntityFactory.makeCoin()
+        return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
       case .dollarSign:
         do {
           let dollarSign = try ModelEntity.loadModel(named: "DollarSign")
@@ -610,7 +610,7 @@ public struct ARViewContainer: UIViewRepresentable {
           return dollarSign
         } catch {
           print("Error loading DollarSign model: \(error). Falling back to coin.")
-          return CoinEntityFactory.makeCoin()  // Fallback
+          return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)  // Fallback
         }
       case .none:
         return nil
