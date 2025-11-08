@@ -228,6 +228,7 @@ public enum ARObjectType: String, CaseIterable, Identifiable {
   case none = "None"
   case coin = "Coin"
   case dollarSign = "Dollar Sign"
+  case giftCard = "Gift Card"
   public var id: String { self.rawValue }
 }
 

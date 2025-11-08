@@ -612,6 +612,8 @@ public struct ARViewContainer: UIViewRepresentable {
           print("Error loading DollarSign model: \(error). Falling back to coin.")
           return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)  // Fallback
         }
+      case .giftCard:
+        return GiftCardEntityFactory.makeGiftCard()
       case .none:
         return nil
       }
