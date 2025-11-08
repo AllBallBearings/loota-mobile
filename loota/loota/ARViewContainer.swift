@@ -28,6 +28,8 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var isSummoningActive: Bool
   @Binding public var focusedLootId: String?
   @Binding public var focusedLootDistance: Float?
+  @Binding public var nearestLootDistance: Float?
+  @Binding public var nearestLootDirection: Float
   @Binding public var isDebugMode: Bool
   @Binding public var showHorizonLine: Bool
 
@@ -44,6 +46,8 @@ public struct ARViewContainer: UIViewRepresentable {
     isSummoningActive: Binding<Bool>,
     focusedLootId: Binding<String?>,
     focusedLootDistance: Binding<Float?>,
+    nearestLootDistance: Binding<Float?>,
+    nearestLootDirection: Binding<Float>,
     isDebugMode: Binding<Bool>,
     showHorizonLine: Binding<Bool>
   ) {
@@ -62,6 +66,8 @@ public struct ARViewContainer: UIViewRepresentable {
     self._isSummoningActive = isSummoningActive
     self._focusedLootId = focusedLootId
     self._focusedLootDistance = focusedLootDistance
+    self._nearestLootDistance = nearestLootDistance
+    self._nearestLootDirection = nearestLootDirection
     self._isDebugMode = isDebugMode
     self._showHorizonLine = showHorizonLine
   }
@@ -186,6 +192,8 @@ public struct ARViewContainer: UIViewRepresentable {
       isSummoningActive: $isSummoningActive,
       focusedLootId: $focusedLootId,
       focusedLootDistance: $focusedLootDistance,
+      nearestLootDistance: $nearestLootDistance,
+      nearestLootDirection: $nearestLootDirection,
       isDebugMode: $isDebugMode,
       showHorizonLine: $showHorizonLine
     )
@@ -212,6 +220,8 @@ public struct ARViewContainer: UIViewRepresentable {
     @Binding public var isSummoningActiveBinding: Bool
     @Binding public var focusedLootIdBinding: String?
     @Binding public var focusedLootDistanceBinding: Float?
+    @Binding public var nearestLootDistanceBinding: Float?
+    @Binding public var nearestLootDirectionBinding: Float
     @Binding public var isDebugMode: Bool
     @Binding public var showHorizonLineBinding: Bool
     // Removed the redundant @Binding for heading here. We use the simple var heading below.
@@ -247,6 +257,10 @@ public struct ARViewContainer: UIViewRepresentable {
 
     // Horizon line properties
     public var horizonEntity: ModelEntity?
+
+    // Compass arrow properties
+    public var compassArrowEntity: ModelEntity?
+    public var compassArrowAnchor: AnchorEntity?
 
     // Action to trigger object placement from the Coordinator
     public var placeObjectsAction: ((ARView?) -> Void)?  // This will be set to self.placeObjectsInARView
@@ -289,6 +303,8 @@ public struct ARViewContainer: UIViewRepresentable {
       isSummoningActive: Binding<Bool>,
       focusedLootId: Binding<String?>,
       focusedLootDistance: Binding<Float?>,
+      nearestLootDistance: Binding<Float?>,
+      nearestLootDirection: Binding<Float>,
       isDebugMode: Binding<Bool>,
       showHorizonLine: Binding<Bool>
     ) {
@@ -303,6 +319,8 @@ public struct ARViewContainer: UIViewRepresentable {
       self._isSummoningActiveBinding = isSummoningActive
       self._focusedLootIdBinding = focusedLootId
       self._focusedLootDistanceBinding = focusedLootDistance
+      self._nearestLootDistanceBinding = nearestLootDistance
+      self._nearestLootDirectionBinding = nearestLootDirection
       self._isDebugMode = isDebugMode
       self._showHorizonLineBinding = showHorizonLine
 
@@ -984,6 +1002,9 @@ public struct ARViewContainer: UIViewRepresentable {
       // Update focus detection for button-based summoning
       updateFocusDetection()
 
+      // Update nearest loot tracking for compass needle
+      updateNearestLoot()
+
       // Update horizon line position and handle setup
       if let arView = arView {
         // If horizon line should be shown but doesn't exist, create it
@@ -1193,24 +1214,102 @@ public struct ARViewContainer: UIViewRepresentable {
     }
 
     public func playCoinSound() {
-      guard let url = Bundle.main.url(forResource: "coin", withExtension: "mp3") else {
-        print("Missing coin.mp3 in app bundle")
+      guard let url = Bundle.main.url(forResource: "CoinPunch", withExtension: "mp3") else {
+        print("❌ AUDIO: Missing CoinPunch.mp3 in app bundle")
+        print("📁 AUDIO: Bundle path: \(Bundle.main.bundlePath)")
         return
       }
+
+      print("✅ AUDIO: Found CoinPunch.mp3 at: \(url)")
+
       do {
+        // Configure audio session to allow playback during AR
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        try audioSession.setActive(true)
+        print("✅ AUDIO: Audio session configured")
+
         // Stop previous sound if playing
         audioPlayer?.stop()
+
         // Create and play new instance
         audioPlayer = try AVAudioPlayer(contentsOf: url)
+        audioPlayer?.volume = 1.0 // Full volume
         audioPlayer?.prepareToPlay()
-        audioPlayer?.play()
+
+        let didPlay = audioPlayer?.play() ?? false
+        print("🔊 AUDIO: Play attempt - Success: \(didPlay), Duration: \(audioPlayer?.duration ?? 0)s")
 
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
-        print("🔊 HAPTIC: Played haptic feedback for coin collection")
+        print("📳 HAPTIC: Played haptic feedback for coin collection")
       } catch {
-        print("Failed to play coin sound: \(error)")
+        print("❌ AUDIO: Failed to play CoinPunch sound: \(error)")
+      }
+    }
+
+    // MARK: - Nearest Loot Tracking for 2D Compass Needle
+
+    private func updateNearestLoot() {
+      guard let arView = arView, let camera = arView.session.currentFrame?.camera else { return }
+
+      // Get camera position and transform
+      let cameraTransform = camera.transform
+      let cameraPosition = SIMD3<Float>(
+        cameraTransform.columns.3.x,
+        cameraTransform.columns.3.y,
+        cameraTransform.columns.3.z
+      )
+
+      // Find nearest loot entity
+      var nearestEntity: ModelEntity? = nil
+      var nearestDistance: Float = Float.infinity
+
+      for entity in coinEntities {
+        let entityPosition = entity.position(relativeTo: nil)
+        let distance = simd_distance(cameraPosition, entityPosition)
+
+        if distance < nearestDistance {
+          nearestDistance = distance
+          nearestEntity = entity
+        }
+      }
+
+      // Update bindings for 2D compass needle
+      if let nearest = nearestEntity {
+        nearestLootDistanceBinding = nearestDistance
+
+        // Get entity position in camera space
+        let entityWorldPosition = nearest.position(relativeTo: nil)
+
+        // Convert entity world position to camera space
+        let cameraMatrix = simd_float4x4(cameraTransform)
+        let cameraMatrixInverse = cameraMatrix.inverse
+
+        let entityWorldPos4 = SIMD4<Float>(entityWorldPosition.x, entityWorldPosition.y, entityWorldPosition.z, 1)
+        let entityCameraPos4 = cameraMatrixInverse * entityWorldPos4
+        let entityCameraPos = SIMD3<Float>(entityCameraPos4.x, entityCameraPos4.y, entityCameraPos4.z)
+
+        // Calculate angle in camera space (horizontal plane only)
+        // In camera space: +Z is forward, +X is right, +Y is up
+        // We want angle where 0 = up (north), rotating clockwise
+        let toEntityFlat = normalize(SIMD3<Float>(entityCameraPos.x, 0, entityCameraPos.z))
+
+        // Angle from forward (-Z in camera space) using atan2
+        // atan2(x, -z) gives us the angle where 0 is forward, positive is clockwise (right)
+        let angle = atan2(toEntityFlat.x, -toEntityFlat.z)
+
+        nearestLootDirectionBinding = angle
+
+        // Debug logging (every 60 frames)
+        if frameCounter % 60 == 0 {
+          print("🧭 COMPASS: Nearest at \(nearestDistance)m, angle: \(angle * 180 / .pi)°")
+        }
+      } else {
+        // No loot available
+        nearestLootDistanceBinding = nil
+        nearestLootDirectionBinding = 0
       }
     }
 
