@@ -17,6 +17,9 @@ public struct ContentView: View {
   @State private var isSummoningActive: Bool = false
   @State private var focusedLootId: String? = nil
   @State private var focusedLootDistance: Float? = nil
+  @State private var nearestLootDistance: Float? = nil
+  @State private var nearestLootDirection: Float = 0 // Angle in radians relative to camera forward
+  @State private var smoothedCompassAngle: Float = 0 // Smoothed angle for display
   @State private var isDebugMode: Bool = false
   @State private var showHorizonLine: Bool = true
 
@@ -43,6 +46,34 @@ public struct ContentView: View {
     let totalPins = huntData.pins.count
     let collectedPins = huntData.pins.filter { $0.collectedByUserId != nil }.count
     return totalPins - collectedPins
+  }
+
+  // Smooth compass angle changes
+  private func updateSmoothedAngle() {
+    let targetAngle = nearestLootDirection
+
+    // Calculate shortest rotation path (handle wraparound at +/- pi)
+    var delta = targetAngle - smoothedCompassAngle
+
+    // Normalize delta to [-pi, pi] range
+    while delta > .pi {
+      delta -= 2 * .pi
+    }
+    while delta < -.pi {
+      delta += 2 * .pi
+    }
+
+    // Apply exponential smoothing (0.3 = smoother, 0.7 = more responsive)
+    let smoothingFactor: Float = 0.4
+    smoothedCompassAngle += delta * smoothingFactor
+
+    // Normalize result to [-pi, pi]
+    while smoothedCompassAngle > .pi {
+      smoothedCompassAngle -= 2 * .pi
+    }
+    while smoothedCompassAngle < -.pi {
+      smoothedCompassAngle += 2 * .pi
+    }
   }
 
   public var body: some View {
@@ -131,6 +162,8 @@ public struct ContentView: View {
           isSummoningActive: $isSummoningActive,
           focusedLootId: $focusedLootId,
           focusedLootDistance: $focusedLootDistance,
+          nearestLootDistance: $nearestLootDistance,
+          nearestLootDirection: $nearestLootDirection,
           isDebugMode: $isDebugMode,
           showHorizonLine: $showHorizonLine
         )
@@ -251,6 +284,75 @@ public struct ContentView: View {
           Spacer()
         }
         .frame(maxWidth: .infinity)
+      }
+
+      // Compass Needle and Nearest Loot Label - Bottom Center (hide when summoning)
+      if let distance = nearestLootDistance, focusedLootId == nil {
+        VStack {
+          Spacer()
+
+          VStack(spacing: 12) {
+            // Distance label
+            VStack(spacing: 4) {
+              Text("Nearest Loot")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(LootaTheme.textPrimary)
+              Text(String(format: "%.0f ft", distance * 3.28084))
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(LootaTheme.highlight)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+              RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.6))
+                .overlay(
+                  RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                      LinearGradient(
+                        colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                      ),
+                      lineWidth: 2
+                    )
+                )
+            )
+            .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 12, x: 0, y: 4)
+
+            // Compass needle
+            ZStack {
+              // Compass background circle
+              Circle()
+                .fill(Color.black.opacity(0.6))
+                .frame(width: 80, height: 80)
+                .overlay(
+                  Circle()
+                    .stroke(
+                      LinearGradient(
+                        colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                      ),
+                      lineWidth: 2
+                    )
+                )
+                .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 8, x: 0, y: 4)
+
+              // Rotating arrow needle with smoothed rotation
+              Image(systemName: "arrow.up")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(LootaTheme.neonCyan)
+                .shadow(color: LootaTheme.neonCyan.opacity(0.8), radius: 8, x: 0, y: 0)
+                .rotationEffect(Angle(radians: Double(smoothedCompassAngle)))
+            }
+          }
+          .padding(.bottom, 100) // Above bottom edge
+        }
+        .frame(maxWidth: .infinity)
+        .onChange(of: nearestLootDirection) { _ in
+          updateSmoothedAngle()
+        }
       }
 
       // Summoning Button - Bottom Center (always visible when loot is focused)
