@@ -106,6 +106,15 @@ public class APIService {
         print("🌐 APIService - fetchHunt: Hunt Description: '\(huntData.description ?? "nil")'")
         print("🌐 APIService - fetchHunt: Hunt Type: \(huntData.type)")
         print("🌐 APIService - fetchHunt: Pins count: \(huntData.pins.count)")
+
+        // Log each pin's objectType to verify what the API is sending
+        print("🎁 APIService - PIN OBJECT TYPES:")
+        for (index, pin) in huntData.pins.enumerated() {
+          let pinIdShort = pin.id?.prefix(8) ?? "unknown"
+          let objectTypeValue = pin.objectType?.rawValue ?? "nil"
+          print("🎁   Pin \(index + 1) [\(pinIdShort)]: objectType = '\(objectTypeValue)'")
+        }
+
         completion(.success(huntData))
       } catch {
         print("🌐 APIService - fetchHunt: ❌ DECODE ERROR: \(error)")

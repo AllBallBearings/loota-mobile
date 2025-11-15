@@ -431,6 +431,7 @@ public struct ARViewContainer: UIViewRepresentable {
 
           // Use pin's objectType if available, otherwise fall back to default
           let lootType = pin?.objectType ?? self.objectType
+          print("🎁 LOOT_TYPE: Pin \(shortId) - objectType from API: \(pin?.objectType?.rawValue ?? "nil"), using: \(lootType.rawValue)")
           guard let entity = createEntity(for: lootType) else { continue }
           objectAnchor.addChild(entity)
 
@@ -548,6 +549,7 @@ public struct ARViewContainer: UIViewRepresentable {
 
           // Use pin's objectType if available, otherwise fall back to default
           let lootType = pin?.objectType ?? objectTypeForProximity
+          print("🎁 LOOT_TYPE: Pin \(shortId) - objectType from API: \(pin?.objectType?.rawValue ?? "nil"), using: \(lootType.rawValue)")
           guard let entity = createEntity(for: lootType) else { continue }
           objectAnchor.addChild(entity)
 

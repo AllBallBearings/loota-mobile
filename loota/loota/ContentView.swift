@@ -5,7 +5,7 @@ import CoreLocation
 import SwiftUI
 
 public struct ContentView: View {
-  @State private var coinsCollected: Int = 0
+  @State private var coinsCollectedThisSession: Int = 0
   @State private var animate: Bool = false
   @State private var selectedObject: ARObjectType = .none
   @State private var currentLocation: CLLocationCoordinate2D?
@@ -46,6 +46,12 @@ public struct ContentView: View {
     let totalPins = huntData.pins.count
     let collectedPins = huntData.pins.filter { $0.collectedByUserId != nil }.count
     return totalPins - collectedPins
+  }
+
+  // Computed property for total coins collected by current user
+  private var totalCoinsCollected: Int {
+    guard let huntData = huntDataManager.huntData, let userId = huntDataManager.userId else { return 0 }
+    return huntData.pins.filter { $0.collectedByUserId == userId }.count + coinsCollectedThisSession
   }
 
   // Smooth compass angle changes
@@ -133,8 +139,9 @@ public struct ContentView: View {
             print("🎯 CONTENTVIEW: ===============================================")
             print("🎯 CONTENTVIEW: onCoinCollected called with pinId: \(collectedPinId)")
             print("🎯 CONTENTVIEW: Timestamp: \(Date())")
-            coinsCollected += 1
-            print("🎯 CONTENTVIEW: Counter incremented to: \(coinsCollected)")
+            coinsCollectedThisSession += 1
+            print("🎯 CONTENTVIEW: Counter incremented to: \(coinsCollectedThisSession)")
+            print("🎯 CONTENTVIEW: Total collected (including previous): \(totalCoinsCollected)")
             withAnimation(.interpolatingSpring(stiffness: 200, damping: 8)) {
               animate = true
             }
@@ -459,7 +466,7 @@ public struct ContentView: View {
                 .foregroundColor(LootaTheme.textSecondary)
                 .textCase(.uppercase)
               
-              Text("\(coinsCollected)")
+              Text("\(totalCoinsCollected)")
                 .font(.system(size: 36, weight: .heavy, design: .rounded))
                 .foregroundColor(LootaTheme.highlight)
                 .shadow(color: LootaTheme.scoreGlow(for: animate), radius: animate ? 14 : 4, x: 0, y: 0)
@@ -905,6 +912,10 @@ public struct ContentView: View {
     // huntDataManager.joinHunt(huntId: huntData.id) // This is now called from HuntDataManager
     self.currentHuntType = huntData.type
     self.statusMessage = ""  // Clear any previous error messages
+
+    // Reset session counter when loading a new hunt
+    self.coinsCollectedThisSession = 0
+    print("ContentView loadHuntData: Reset session counter. Total user collected: \(totalCoinsCollected)")
 
     switch huntData.type {
     case .geolocation:

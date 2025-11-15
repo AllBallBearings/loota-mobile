@@ -61,7 +61,7 @@ enum GiftCardEntityFactory {
 
     // MARK: - Helper Methods
 
-    /// Creates a rounded rectangle using multiple boxes to approximate rounded corners
+    /// Creates a rounded rectangle using a box with rounded corners
     private static func createRoundedRectangle(
         width: Float,
         height: Float,
@@ -70,81 +70,18 @@ enum GiftCardEntityFactory {
         color: UIColor
     ) -> ModelEntity {
 
-        let container = ModelEntity()
         let material = SimpleMaterial(color: color, isMetallic: false)
 
-        // Create center rectangle (main body)
-        let centerWidth = width - (2 * cornerRadius)
-        let centerHeight = height - (2 * cornerRadius)
-
-        let centerMesh = MeshResource.generateBox(
-            width: centerWidth,
+        // Use a simple box with rounded corners
+        // RealityKit's generateBox with cornerRadius creates smooth rounded edges
+        let mesh = MeshResource.generateBox(
+            width: width,
             height: thickness,
-            depth: centerHeight
-        )
-        let centerEntity = ModelEntity(mesh: centerMesh, materials: [material])
-        container.addChild(centerEntity)
-
-        // Create horizontal bars (top and bottom)
-        let hBarMesh = MeshResource.generateBox(
-            width: centerWidth,
-            height: thickness,
-            depth: 2 * cornerRadius
+            depth: height,
+            cornerRadius: cornerRadius
         )
 
-        let topBar = ModelEntity(mesh: hBarMesh, materials: [material])
-        topBar.position = [0, 0, (centerHeight/2 + cornerRadius)]
-        container.addChild(topBar)
-
-        let bottomBar = ModelEntity(mesh: hBarMesh, materials: [material])
-        bottomBar.position = [0, 0, -(centerHeight/2 + cornerRadius)]
-        container.addChild(bottomBar)
-
-        // Create vertical bars (left and right)
-        let vBarMesh = MeshResource.generateBox(
-            width: 2 * cornerRadius,
-            height: thickness,
-            depth: centerHeight
-        )
-
-        let leftBar = ModelEntity(mesh: vBarMesh, materials: [material])
-        leftBar.position = [-(centerWidth/2 + cornerRadius), 0, 0]
-        container.addChild(leftBar)
-
-        let rightBar = ModelEntity(mesh: vBarMesh, materials: [material])
-        rightBar.position = [(centerWidth/2 + cornerRadius), 0, 0]
-        container.addChild(rightBar)
-
-        // Create corner cylinders (rounded corners)
-        let cornerMesh = MeshResource.generateCylinder(
-            height: thickness,
-            radius: cornerRadius
-        )
-
-        // Top-left corner
-        let tlCorner = ModelEntity(mesh: cornerMesh, materials: [material])
-        tlCorner.position = [-(centerWidth/2), 0, (centerHeight/2)]
-        tlCorner.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        container.addChild(tlCorner)
-
-        // Top-right corner
-        let trCorner = ModelEntity(mesh: cornerMesh, materials: [material])
-        trCorner.position = [(centerWidth/2), 0, (centerHeight/2)]
-        trCorner.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        container.addChild(trCorner)
-
-        // Bottom-left corner
-        let blCorner = ModelEntity(mesh: cornerMesh, materials: [material])
-        blCorner.position = [-(centerWidth/2), 0, -(centerHeight/2)]
-        blCorner.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        container.addChild(blCorner)
-
-        // Bottom-right corner
-        let brCorner = ModelEntity(mesh: cornerMesh, materials: [material])
-        brCorner.position = [(centerWidth/2), 0, -(centerHeight/2)]
-        brCorner.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        container.addChild(brCorner)
-
-        return container
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        return entity
     }
 }

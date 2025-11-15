@@ -227,12 +227,23 @@ public enum HuntError: Error, LocalizedError {
 
 // MARK: - AR and View-Related Data Models
 
-public enum ARObjectType: String, CaseIterable, Identifiable {
-  case none = "None"
-  case coin = "Coin"
-  case dollarSign = "Dollar Sign"
-  case giftCard = "Gift Card"
+public enum ARObjectType: String, CaseIterable, Identifiable, Codable {
+  case none = "none"
+  case coin = "coin"
+  case dollarSign = "dollarSign"
+  case giftCard = "giftCard"
+
   public var id: String { self.rawValue }
+
+  // Display name for UI
+  public var displayName: String {
+    switch self {
+    case .none: return "None"
+    case .coin: return "Coin"
+    case .dollarSign: return "Dollar Sign"
+    case .giftCard: return "Gift Card"
+    }
+  }
 }
 
 public struct ProximityMarkerData: Identifiable {

@@ -4,11 +4,18 @@ struct HuntCompletionView: View {
     let huntData: HuntData
     let currentUserId: String
     @Binding var isPresented: Bool
-    
+
     private var isWinner: Bool {
         huntData.winnerId == currentUserId
     }
-    
+
+    // Check if user has looted everything (all remaining items collected by this user)
+    private var hasLootedEverything: Bool {
+        let userCollectedPins = huntData.pins.filter { $0.collectedByUserId == currentUserId }
+        let remainingPins = huntData.pins.filter { $0.collectedByUserId == nil }
+        return !userCollectedPins.isEmpty && remainingPins.isEmpty
+    }
+
     var body: some View {
         ZStack {
             LootaTheme.backgroundGradient
@@ -21,106 +28,322 @@ struct HuntCompletionView: View {
             )
             .blendMode(.screen)
             .ignoresSafeArea()
-            
-            VStack(spacing: 28) {
-                VStack(spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .strokeBorder(
-                                AngularGradient(
-                                    gradient: Gradient(colors: [
-                                        LootaTheme.neonCyan,
-                                        LootaTheme.cosmicPurple,
-                                        LootaTheme.highlight,
-                                        LootaTheme.neonCyan
-                                    ]),
-                                    center: .center
-                                ),
-                                lineWidth: 6
-                            )
-                            .frame(width: 116, height: 116)
-                            .shadow(color: LootaTheme.accentGlow.opacity(0.45), radius: 18, x: 0, y: 10)
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [Color.white.opacity(0.18), Color.clear],
-                                    center: .center,
-                                    startRadius: 6,
-                                    endRadius: 84
+
+            if hasLootedEverything && !(huntData.isCompleted ?? false) {
+                // Show "Everything's Looted!" screen when user collected all remaining items
+                EverythingsLootedView(huntData: huntData, currentUserId: currentUserId, isPresented: $isPresented)
+            } else {
+                // Show original completion screen when hunt is fully completed
+                VStack(spacing: 28) {
+                    VStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .strokeBorder(
+                                    AngularGradient(
+                                        gradient: Gradient(colors: [
+                                            LootaTheme.neonCyan,
+                                            LootaTheme.cosmicPurple,
+                                            LootaTheme.highlight,
+                                            LootaTheme.neonCyan
+                                        ]),
+                                        center: .center
+                                    ),
+                                    lineWidth: 6
                                 )
-                            )
-                            .frame(width: 98, height: 98)
-                        Text("🎉")
-                            .font(.system(size: 64))
-                    }
-                    
-                    Text("Totally Looted!")
-                        .font(.system(size: 34, weight: .heavy, design: .rounded))
-                        .foregroundColor(LootaTheme.highlight)
-                    
-                    if isWinner {
-                        Text("Congratulations! You won!")
-                            .font(.system(size: 20, weight: .semibold, design: .rounded))
-                            .foregroundColor(LootaTheme.success)
-                    } else {
-                        Text("Hunt Complete")
-                            .font(.system(size: 20, weight: .semibold, design: .rounded))
-                            .foregroundColor(LootaTheme.neonCyan)
-                    }
-                }
-                .multilineTextAlignment(.center)
-                
-                if isWinner {
-                    WinnerContactCard(creatorContact: huntData.creatorContact)
-                } else {
-                    VStack(spacing: 10) {
-                        Text("Better luck next time!")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
-                            .foregroundColor(LootaTheme.textSecondary)
-                        
-                        if let winnerId = huntData.winnerId {
-                            Text("Winner: \(winnerId)")
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(LootaTheme.textMuted)
+                                .frame(width: 116, height: 116)
+                                .shadow(color: LootaTheme.accentGlow.opacity(0.45), radius: 18, x: 0, y: 10)
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [Color.white.opacity(0.18), Color.clear],
+                                        center: .center,
+                                        startRadius: 6,
+                                        endRadius: 84
+                                    )
+                                )
+                                .frame(width: 98, height: 98)
+                            Text("🎉")
+                                .font(.system(size: 64))
+                        }
+
+                        Text("Totally Looted!")
+                            .font(.system(size: 34, weight: .heavy, design: .rounded))
+                            .foregroundColor(LootaTheme.highlight)
+
+                        if isWinner {
+                            Text("Congratulations! You won!")
+                                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                .foregroundColor(LootaTheme.success)
+                        } else {
+                            Text("Hunt Complete")
+                                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                .foregroundColor(LootaTheme.neonCyan)
                         }
                     }
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                            )
-                    )
-                }
-                
-                Button(action: {
-                    isPresented = false
-                }) {
-                    Text("Back to Hunts")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 34)
-                        .padding(.vertical, 14)
+                    .multilineTextAlignment(.center)
+
+                    if isWinner {
+                        WinnerContactCard(creatorContact: huntData.creatorContact)
+                    } else {
+                        VStack(spacing: 10) {
+                            Text("Better luck next time!")
+                                .font(.system(size: 18, weight: .medium, design: .rounded))
+                                .foregroundColor(LootaTheme.textSecondary)
+
+                            if let winnerId = huntData.winnerId {
+                                Text("Winner: \(winnerId)")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundColor(LootaTheme.textMuted)
+                            }
+                        }
+                        .padding(.vertical, 18)
+                        .frame(maxWidth: .infinity)
                         .background(
-                            LinearGradient(
-                                colors: [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
-                                startPoint: .leading,
-                                endPoint: .trailing
+                            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                )
+                        )
+                    }
+
+                    Button(action: {
+                        isPresented = false
+                    }) {
+                        Text("Back to Hunts")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 34)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(
+                                    colors: [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(22)
+                            .shadow(color: LootaTheme.cosmicPurple.opacity(0.4), radius: 14, x: 0, y: 10)
+                    }
+                    .padding(.top, 8)
+                }
+                .lootaGlassBackground(
+                    cornerRadius: 36,
+                    padding: EdgeInsets(top: 32, leading: 30, bottom: 34, trailing: 30)
+                )
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+}
+
+struct EverythingsLootedView: View {
+    let huntData: HuntData
+    let currentUserId: String
+    @Binding var isPresented: Bool
+
+    // Calculate loot breakdown by object type
+    private var lootBreakdown: [(type: ARObjectType, count: Int)] {
+        let userCollectedPins = huntData.pins.filter { $0.collectedByUserId == currentUserId }
+
+        // Group by object type
+        let grouped = Dictionary(grouping: userCollectedPins) { pin in
+            pin.objectType ?? .coin
+        }
+
+        return grouped.map { (type: $0.key, count: $0.value.count) }
+            .sorted { $0.type.displayName < $1.type.displayName }
+    }
+
+    private var totalCollected: Int {
+        huntData.pins.filter { $0.collectedByUserId == currentUserId }.count
+    }
+
+    private var creatorName: String {
+        huntData.creator?.name ?? "the Hunt Creator"
+    }
+
+    var body: some View {
+        VStack(spacing: 28) {
+            // Header with icon
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(
+                            AngularGradient(
+                                gradient: Gradient(colors: [
+                                    LootaTheme.highlight,
+                                    LootaTheme.neonCyan,
+                                    LootaTheme.cosmicPurple,
+                                    LootaTheme.highlight
+                                ]),
+                                center: .center
+                            ),
+                            lineWidth: 6
+                        )
+                        .frame(width: 116, height: 116)
+                        .shadow(color: LootaTheme.accentGlow.opacity(0.45), radius: 18, x: 0, y: 10)
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.white.opacity(0.18), Color.clear],
+                                center: .center,
+                                startRadius: 6,
+                                endRadius: 84
                             )
                         )
-                        .cornerRadius(22)
-                        .shadow(color: LootaTheme.cosmicPurple.opacity(0.4), radius: 14, x: 0, y: 10)
+                        .frame(width: 98, height: 98)
+                    Text("💰")
+                        .font(.system(size: 64))
                 }
-                .padding(.top, 8)
+
+                Text("Everything's Looted!")
+                    .font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .foregroundColor(LootaTheme.highlight)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("You collected all available loot!")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(LootaTheme.neonCyan)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .lootaGlassBackground(
-                cornerRadius: 36,
-                padding: EdgeInsets(top: 32, leading: 30, bottom: 34, trailing: 30)
+            .multilineTextAlignment(.center)
+
+            // Loot breakdown card
+            VStack(spacing: 16) {
+                Text("Your Loot")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .foregroundColor(LootaTheme.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(spacing: 12) {
+                    ForEach(lootBreakdown, id: \.type) { item in
+                        HStack {
+                            // Icon for loot type
+                            Image(systemName: iconForType(item.type))
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(LootaTheme.highlight)
+                                .frame(width: 32)
+
+                            Text(item.type.displayName)
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(LootaTheme.textPrimary)
+
+                            Spacer()
+
+                            Text("\(item.count)")
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundColor(LootaTheme.neonCyan)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.white.opacity(0.06))
+                        )
+                    }
+
+                    // Total
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                        .padding(.vertical, 4)
+
+                    HStack {
+                        Text("Total Collected")
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .foregroundColor(LootaTheme.textPrimary)
+
+                        Spacer()
+
+                        Text("\(totalCollected)")
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .foregroundColor(LootaTheme.highlight)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
             )
-            .padding(.horizontal, 24)
+
+            // Creator contact message
+            VStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(LootaTheme.neonCyan)
+                    Text("Next Steps")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(LootaTheme.neonCyan)
+                }
+
+                Text("The Hunt Creator, **\(creatorName)**, will contact you to settle up your loot.")
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundColor(LootaTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 18)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .stroke(LootaTheme.neonCyan.opacity(0.3), lineWidth: 1)
+                    )
+            )
+
+            // Back button
+            Button(action: {
+                isPresented = false
+            }) {
+                Text("Back to Hunts")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 34)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(22)
+                    .shadow(color: LootaTheme.cosmicPurple.opacity(0.4), radius: 14, x: 0, y: 10)
+            }
+            .padding(.top, 8)
+        }
+        .lootaGlassBackground(
+            cornerRadius: 36,
+            padding: EdgeInsets(top: 32, leading: 30, bottom: 34, trailing: 30)
+        )
+        .padding(.horizontal, 24)
+    }
+
+    private func iconForType(_ type: ARObjectType) -> String {
+        switch type {
+        case .coin:
+            return "bitcoinsign.circle.fill"
+        case .dollarSign:
+            return "dollarsign.circle.fill"
+        case .giftCard:
+            return "giftcard.fill"
+        case .none:
+            return "questionmark.circle.fill"
         }
     }
 }

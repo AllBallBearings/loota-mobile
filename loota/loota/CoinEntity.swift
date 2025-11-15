@@ -33,24 +33,24 @@ enum CoinEntityFactory {
         }
     }
 
-    // MARK: - Classic Coin (10% rim width, subtle embossing)
+    // MARK: - Classic Coin (20% rim width, prominent embossing)
 
     private static func makeClassicCoin(radius: Float, height: Float, color: UIColor) -> ModelEntity {
-        let rimWidth = radius * 0.10  // 10% rim
+        let rimWidth = radius * 0.20  // 20% rim (increased from 10%)
         let centerRadius = radius - rimWidth
-        let centerHeight = height * 0.6  // Center is 60% of total height
+        let centerHeight = height * 0.5  // Center is 50% of total height (more pronounced)
         let rimHeight = height
 
         let container = ModelEntity()
 
-        // Center disc (thinner)
+        // Center disc (thinner for more visible edge)
         let centerMesh = MeshResource.generateCylinder(height: centerHeight, radius: centerRadius)
         let centerMaterial = SimpleMaterial(color: color, isMetallic: true)
         let centerEntity = ModelEntity(mesh: centerMesh, materials: [centerMaterial])
 
-        // Outer rim (full height)
+        // Outer rim (full height, more prominent)
         let rimMesh = MeshResource.generateCylinder(height: rimHeight, radius: radius)
-        let rimColor = color.withAlphaComponent(0.95)
+        let rimColor = color.withAlphaComponent(0.9)  // Slightly darker for better contrast
         let rimMaterial = SimpleMaterial(color: rimColor, isMetallic: true)
         let rimEntity = ModelEntity(mesh: rimMesh, materials: [rimMaterial])
 
