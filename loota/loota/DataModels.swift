@@ -23,6 +23,7 @@ public struct PinData: Codable {
   public let createdAt: String?
   public let collectedByUserId: String?
   public let collectedAt: String?
+  public let objectType: ARObjectType?  // Loot type (coin, giftCard, dollarSign)
 
   // Custom initializer to handle flexible lat/lng decoding (String or Double)
   public init(from decoder: Decoder) throws {
@@ -55,6 +56,7 @@ public struct PinData: Codable {
     createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     collectedByUserId = try container.decodeIfPresent(String.self, forKey: .collectedByUserId)
     collectedAt = try container.decodeIfPresent(String.self, forKey: .collectedAt)
+    objectType = try container.decodeIfPresent(ARObjectType.self, forKey: .objectType)
   }
 
   // Manual encoding if needed, or rely on default if only decoding is custom
@@ -72,11 +74,12 @@ public struct PinData: Codable {
     try container.encodeIfPresent(createdAt, forKey: .createdAt)
     try container.encodeIfPresent(collectedByUserId, forKey: .collectedByUserId)
     try container.encodeIfPresent(collectedAt, forKey: .collectedAt)
+    try container.encodeIfPresent(objectType, forKey: .objectType)
   }
 
   // Define CodingKeys for all properties
   private enum CodingKeys: String, CodingKey {
-    case id, huntId, lat, lng, distanceFt, directionStr, x, y, order, createdAt, collectedByUserId, collectedAt
+    case id, huntId, lat, lng, distanceFt, directionStr, x, y, order, createdAt, collectedByUserId, collectedAt, objectType
   }
 }
 
@@ -224,11 +227,23 @@ public enum HuntError: Error, LocalizedError {
 
 // MARK: - AR and View-Related Data Models
 
-public enum ARObjectType: String, CaseIterable, Identifiable {
-  case none = "None"
-  case coin = "Coin"
-  case dollarSign = "Dollar Sign"
+public enum ARObjectType: String, CaseIterable, Identifiable, Codable {
+  case none = "none"
+  case coin = "coin"
+  case dollarSign = "dollarSign"
+  case giftCard = "giftCard"
+
   public var id: String { self.rawValue }
+
+  // Display name for UI
+  public var displayName: String {
+    switch self {
+    case .none: return "None"
+    case .coin: return "Coin"
+    case .dollarSign: return "Dollar Sign"
+    case .giftCard: return "Gift Card"
+    }
+  }
 }
 
 public struct ProximityMarkerData: Identifiable {

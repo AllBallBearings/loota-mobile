@@ -423,14 +423,17 @@ public struct ARViewContainer: UIViewRepresentable {
           let objectAnchor = AnchorEntity()
           objectAnchor.position = arPositionInBaseFrame
 
-          guard let entity = createEntity(for: self.objectType) else { continue }
-          objectAnchor.addChild(entity)
-
-          // Get pin data for this index
+          // Get pin data for this index (moved before entity creation)
           let pin = index < self.pinData.count ? self.pinData[index] : nil
           let markerNumber = (pin?.order ?? index) + 1
           let pinId = pin?.id ?? "unknown"
           let shortId = pinId.prefix(8)
+
+          // Use pin's objectType if available, otherwise fall back to default
+          let lootType = pin?.objectType ?? self.objectType
+          print("🎁 LOOT_TYPE: Pin \(shortId) - objectType from API: \(pin?.objectType?.rawValue ?? "nil"), using: \(lootType.rawValue)")
+          guard let entity = createEntity(for: lootType) else { continue }
+          objectAnchor.addChild(entity)
 
           // Store the mapping between entity and pin ID
           self.entityToPinId[entity] = pinId
@@ -538,14 +541,17 @@ public struct ARViewContainer: UIViewRepresentable {
           let objectAnchor = AnchorEntity()  // Create a new anchor, positioned relative to its parent
           objectAnchor.position = arPositionInBaseFrame  // Set its position within baseAnchor's coordinate system
 
-          guard let entity = createEntity(for: objectTypeForProximity) else { continue }
-          objectAnchor.addChild(entity)
-
-          // Get pin data for this index
+          // Get pin data for this index (moved before entity creation)
           let pin = index < self.pinData.count ? self.pinData[index] : nil
           let markerNumber = (pin?.order ?? index) + 1
           let pinId = pin?.id ?? "unknown"
           let shortId = pinId.prefix(8)
+
+          // Use pin's objectType if available, otherwise fall back to default
+          let lootType = pin?.objectType ?? objectTypeForProximity
+          print("🎁 LOOT_TYPE: Pin \(shortId) - objectType from API: \(pin?.objectType?.rawValue ?? "nil"), using: \(lootType.rawValue)")
+          guard let entity = createEntity(for: lootType) else { continue }
+          objectAnchor.addChild(entity)
 
           // Store the mapping between entity and pin ID
           self.entityToPinId[entity] = pinId
@@ -620,7 +626,7 @@ public struct ARViewContainer: UIViewRepresentable {
     private func createEntity(for type: ARObjectType) -> ModelEntity? {
       switch type {
       case .coin:
-        return CoinEntityFactory.makeCoin()
+        return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
       case .dollarSign:
         do {
           let dollarSign = try ModelEntity.loadModel(named: "DollarSign")
@@ -628,8 +634,10 @@ public struct ARViewContainer: UIViewRepresentable {
           return dollarSign
         } catch {
           print("Error loading DollarSign model: \(error). Falling back to coin.")
-          return CoinEntityFactory.makeCoin()  // Fallback
+          return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)  // Fallback
         }
+      case .giftCard:
+        return GiftCardEntityFactory.makeGiftCard()
       case .none:
         return nil
       }

@@ -285,7 +285,7 @@ public class HuntDataManager: ObservableObject {
           print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt Name: '\(data.name ?? "nil")'")
           print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt Description: '\(data.description ?? "nil")'")
           print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt Type: '\(data.type.rawValue)'")
-          
+
           // Sort pins by order field to ensure consistent numbering
           data.pins.sort { pin1, pin2 in
             let order1 = pin1.order ?? Int.max
@@ -293,26 +293,53 @@ public class HuntDataManager: ObservableObject {
             return order1 < order2
           }
           print("DEBUG: HuntDataManager - proceedWithHuntFetch: Pins sorted by order field")
-          
+
           // Log all pin data with order-based numbering for debugging
           for pin in data.pins {
             let displayNumber = (pin.order ?? -1) + 1
-            print("DEBUG: HuntDataManager - Marker \(displayNumber): ID: \(pin.id ?? "nil"), Order: \(pin.order ?? -1), Lat: \(pin.lat ?? 0), Lng: \(pin.lng ?? 0)")
+            print("DEBUG: HuntDataManager - Marker \(displayNumber): ID: \(pin.id ?? "nil"), Order: \(pin.order ?? -1), Lat: \(pin.lat ?? 0), Lng: \(pin.lng ?? 0), CollectedBy: \(pin.collectedByUserId ?? "nil")")
           }
-          
+
           // Check if server has pins that we think are collected (indicating server reset)
           let serverPinIDs = Set(data.pins.compactMap { $0.id })
           let conflictingPins = self.collectedPinIDs.intersection(serverPinIDs)
-          
+
           if !conflictingPins.isEmpty {
             print("DEBUG: HuntDataManager - proceedWithHuntFetch: Server has \(conflictingPins.count) pins that we thought were collected, clearing cache")
             print("DEBUG: HuntDataManager - proceedWithHuntFetch: Conflicting pin IDs: \(conflictingPins)")
             self.clearCollectedPins()
           }
-          
+
+          // Check if user has already collected all remaining loot (rejoin scenario)
+          if let userId = self.userId {
+            let userCollectedPins = data.pins.filter { $0.collectedByUserId == userId }
+            let uncollectedPins = data.pins.filter { $0.collectedByUserId == nil }
+
+            print("DEBUG: HuntDataManager - proceedWithHuntFetch: User collected: \(userCollectedPins.count), Uncollected: \(uncollectedPins.count)")
+
+            // If user collected pins and no uncollected pins remain, show completion screen
+            if !userCollectedPins.isEmpty && uncollectedPins.isEmpty && !(data.isCompleted ?? false) {
+              print("DEBUG: HuntDataManager - proceedWithHuntFetch: User has already collected all loot! Showing completion screen")
+              self.huntData = data // Store full data with collected pins
+              self.isFetchingHunt = false
+              self.showCompletionScreen = true
+              return
+            }
+
+            // If hunt is already completed, show completion screen with full data
+            if data.isCompleted ?? false {
+              print("DEBUG: HuntDataManager - proceedWithHuntFetch: Hunt is completed! Showing completion screen")
+              self.huntData = data // Store full data
+              self.isFetchingHunt = false
+              self.showCompletionScreen = true
+              return
+            }
+          }
+
+          // For active gameplay, filter out collected pins so they don't appear in AR
           data.pins.removeAll { self.collectedPinIDs.contains($0.id ?? "") }
-          print("DEBUG: HuntDataManager - proceedWithHuntFetch: After filtering collected pins, \(data.pins.count) pins remain")
-          
+          print("DEBUG: HuntDataManager - proceedWithHuntFetch: After filtering collected pins, \(data.pins.count) pins remain for AR")
+
           self.huntData = data
           self.isFetchingHunt = false
           
@@ -457,8 +484,56 @@ public class HuntDataManager: ObservableObject {
 
   private func removePin(pinId: String) {
     guard var huntData = huntData else { return }
+
+    // Check BEFORE removing if this is the last pin
+    let remainingPinsBeforeRemoval = huntData.pins.count
+    print("DEBUG: HuntDataManager - removePin: Remaining pins before removal: \(remainingPinsBeforeRemoval)")
+
     huntData.pins.removeAll { $0.id == pinId }
     self.huntData = huntData
+
+    print("DEBUG: HuntDataManager - removePin: Remaining pins after removal: \(huntData.pins.count)")
+
+    // Check if user has collected all remaining loot (pins array is now empty)
+    if huntData.pins.isEmpty && !collectedPinIDs.isEmpty && !(huntData.isCompleted ?? false) {
+      print("DEBUG: HuntDataManager - User collected all remaining loot! Refreshing hunt data for completion screen")
+      print("DEBUG: HuntDataManager - Total collected pins: \(collectedPinIDs.count)")
+
+      // Refetch hunt data to get full pin details with collectedByUserId
+      refreshHuntDataForCompletion(huntId: huntData.id)
+    }
+  }
+
+  private func refreshHuntDataForCompletion(huntId: String) {
+    guard let userId = userId else { return }
+
+    print("DEBUG: HuntDataManager - refreshHuntDataForCompletion: Fetching full hunt data")
+
+    APIService.shared.fetchHunt(withId: huntId, userId: userId) { [weak self] result in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+
+        switch result {
+        case .success(let fullHuntData):
+          print("DEBUG: HuntDataManager - refreshHuntDataForCompletion: Successfully fetched full hunt data")
+          print("DEBUG: HuntDataManager - refreshHuntDataForCompletion: Total pins: \(fullHuntData.pins.count)")
+
+          let userCollected = fullHuntData.pins.filter { $0.collectedByUserId == userId }
+          print("DEBUG: HuntDataManager - refreshHuntDataForCompletion: User collected: \(userCollected.count)")
+
+          // Update huntData with full data (including collected pins)
+          self.huntData = fullHuntData
+
+          // Show completion screen
+          self.showCompletionScreen = true
+
+        case .failure(let error):
+          print("DEBUG: HuntDataManager - refreshHuntDataForCompletion: Failed to fetch: \(error)")
+          // Fallback: show completion screen anyway with current data
+          self.showCompletionScreen = true
+        }
+      }
+    }
   }
   
   // MARK: - Hunt Completion Detection
