@@ -327,32 +327,73 @@ public struct ContentView: View {
             )
             .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 12, x: 0, y: 4)
 
-            // Compass needle
+            // Compass needle with a flattened HUD look
             ZStack {
-              // Compass background circle
-              Circle()
-                .fill(Color.black.opacity(0.6))
-                .frame(width: 80, height: 80)
+              Ellipse()
+                .fill(
+                  LinearGradient(
+                    colors: [
+                      Color.black.opacity(0.85),
+                      Color.black.opacity(0.45)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                  )
+                )
                 .overlay(
-                  Circle()
+                  Ellipse()
                     .stroke(
                       LinearGradient(
                         colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        startPoint: .leading,
+                        endPoint: .trailing
                       ),
-                      lineWidth: 2
+                      lineWidth: 3
                     )
+                    .blur(radius: 0.5)
                 )
-                .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 8, x: 0, y: 4)
+
+              Ellipse()
+                .fill(
+                  LinearGradient(
+                    colors: [
+                      LootaTheme.neonCyan.opacity(0.12),
+                      Color.white.opacity(0.02)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                  )
+                )
+                .padding(8)
+
+              Capsule()
+                .fill(Color.white.opacity(0.25))
+                .frame(width: 72, height: 6)
+                .blur(radius: 2)
+                .offset(y: -22)
+
+              Capsule()
+                .fill(Color.black.opacity(0.6))
+                .frame(width: 85, height: 12)
+                .blur(radius: 6)
+                .offset(y: 30)
 
               // Rotating arrow needle with smoothed rotation
-              Image(systemName: "arrow.up")
-                .font(.system(size: 32, weight: .bold))
-                .foregroundColor(LootaTheme.neonCyan)
-                .shadow(color: LootaTheme.neonCyan.opacity(0.8), radius: 8, x: 0, y: 0)
+              Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 40, weight: .bold))
+                .foregroundStyle(
+                  LinearGradient(
+                    colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
+                    startPoint: .top,
+                    endPoint: .bottom
+                  )
+                )
+                .shadow(color: LootaTheme.neonCyan.opacity(0.9), radius: 10)
                 .rotationEffect(Angle(radians: Double(smoothedCompassAngle)))
             }
+            .frame(width: 130, height: 95)
+            .rotation3DEffect(.degrees(55), axis: (x: 1, y: 0, z: 0))
+            .shadow(color: LootaTheme.accentGlow.opacity(0.35), radius: 16, x: 0, y: 12)
           }
           .padding(.bottom, 100) // Above bottom edge
         }

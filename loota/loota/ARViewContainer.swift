@@ -1256,7 +1256,6 @@ public struct ARViewContainer: UIViewRepresentable {
     private func updateNearestLoot() {
       guard let arView = arView, let camera = arView.session.currentFrame?.camera else { return }
 
-      // Get camera position and transform
       let cameraTransform = camera.transform
       let cameraPosition = SIMD3<Float>(
         cameraTransform.columns.3.x,
@@ -1264,54 +1263,72 @@ public struct ARViewContainer: UIViewRepresentable {
         cameraTransform.columns.3.z
       )
 
-      // Find nearest loot entity
-      var nearestEntity: ModelEntity? = nil
-      var nearestDistance: Float = Float.infinity
+      // Find the closest loot entity in world space
+      var nearestEntity: ModelEntity?
+      var nearestDistance: Float = .infinity
 
       for entity in coinEntities {
         let entityPosition = entity.position(relativeTo: nil)
         let distance = simd_distance(cameraPosition, entityPosition)
-
         if distance < nearestDistance {
           nearestDistance = distance
           nearestEntity = entity
         }
       }
 
-      // Update bindings for 2D compass needle
-      if let nearest = nearestEntity {
-        nearestLootDistanceBinding = nearestDistance
-
-        // Get entity position in camera space
-        let entityWorldPosition = nearest.position(relativeTo: nil)
-
-        // Convert entity world position to camera space
-        let cameraMatrix = simd_float4x4(cameraTransform)
-        let cameraMatrixInverse = cameraMatrix.inverse
-
-        let entityWorldPos4 = SIMD4<Float>(entityWorldPosition.x, entityWorldPosition.y, entityWorldPosition.z, 1)
-        let entityCameraPos4 = cameraMatrixInverse * entityWorldPos4
-        let entityCameraPos = SIMD3<Float>(entityCameraPos4.x, entityCameraPos4.y, entityCameraPos4.z)
-
-        // Calculate angle in camera space (horizontal plane only)
-        // In camera space: +Z is forward, +X is right, +Y is up
-        // We want angle where 0 = up (north), rotating clockwise
-        let toEntityFlat = normalize(SIMD3<Float>(entityCameraPos.x, 0, entityCameraPos.z))
-
-        // Angle from forward (-Z in camera space) using atan2
-        // atan2(x, -z) gives us the angle where 0 is forward, positive is clockwise (right)
-        let angle = atan2(toEntityFlat.x, -toEntityFlat.z)
-
-        nearestLootDirectionBinding = angle
-
-        // Debug logging (every 60 frames)
-        if frameCounter % 60 == 0 {
-          print("🧭 COMPASS: Nearest at \(nearestDistance)m, angle: \(angle * 180 / .pi)°")
-        }
-      } else {
-        // No loot available
+      guard let nearest = nearestEntity else {
         nearestLootDistanceBinding = nil
         nearestLootDirectionBinding = 0
+        return
+      }
+
+      nearestLootDistanceBinding = nearestDistance
+
+      // Direction from camera to loot
+      let entityWorldPosition = nearest.position(relativeTo: nil)
+      let toEntity = entityWorldPosition - cameraPosition
+
+      // Use world-up projection so tilt/pitch doesn't collapse horizontal vectors
+      let worldUp = SIMD3<Float>(0, 1, 0)
+      var toEntityFlat = toEntity - simd_dot(toEntity, worldUp) * worldUp
+      var forwardVector = SIMD3<Float>(
+        -cameraTransform.columns.2.x,
+        -cameraTransform.columns.2.y,
+        -cameraTransform.columns.2.z
+      )
+      var forwardFlat = forwardVector - simd_dot(forwardVector, worldUp) * worldUp
+      var rightFlat = simd_cross(forwardFlat, worldUp)
+
+      // Normalize with fallbacks for near-zero lengths to avoid NaNs
+      if simd_length_squared(toEntityFlat) < 1e-6 {
+        toEntityFlat = SIMD3<Float>(0, 0, -1)
+      } else {
+        toEntityFlat = normalize(toEntityFlat)
+      }
+
+      if simd_length_squared(forwardFlat) < 1e-6 {
+        forwardFlat = SIMD3<Float>(0, 0, -1)
+      } else {
+        forwardFlat = normalize(forwardFlat)
+      }
+
+      if simd_length_squared(rightFlat) < 1e-6 {
+        rightFlat = SIMD3<Float>(1, 0, 0)
+      } else {
+        rightFlat = normalize(rightFlat)
+      }
+
+      // Project loot direction into camera's horizontal frame
+      let xComponent = simd_dot(toEntityFlat, rightFlat)
+      let zComponent = simd_dot(toEntityFlat, forwardFlat)
+      let angle = atan2(xComponent, zComponent)
+
+      if angle.isFinite {
+        nearestLootDirectionBinding = angle
+      }
+
+      if frameCounter % 60 == 0 {
+        print("🧭 COMPASS: Nearest at \(nearestDistance)m, angle: \(angle * 180 / .pi)°")
       }
     }
 
