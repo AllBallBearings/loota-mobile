@@ -228,11 +228,13 @@ public struct ARViewContainer: UIViewRepresentable {
 
     public var onCoinCollected: ((String) -> Void)?
     public var coinEntities: [ModelEntity] = []
+    public var baseOrientations: [ModelEntity: simd_quatf] = [:]  // Preserve original orientation for spinning
     public var anchors: [AnchorEntity] = []
     public var entityToPinId: [ModelEntity: String] = [:]  // Map entities to their pin IDs
     public var revolutionDuration: TimeInterval = 1.5
     public var accumulatedAngle: Float = 0
     public var lastTimestamp: CFTimeInterval?
+    private var animationTime: Float = 0
     public weak var arView: ARView?
     public var audioPlayer: AVAudioPlayer?  // Moved audio player here
 
@@ -437,6 +439,7 @@ public struct ARViewContainer: UIViewRepresentable {
 
           // Store the mapping between entity and pin ID
           self.entityToPinId[entity] = pinId
+          self.baseOrientations[entity] = entity.transform.rotation  // Cache initial orientation
           self.coinEntities.append(entity)
 
           // Add labels only in debug mode
@@ -1039,7 +1042,7 @@ public struct ARViewContainer: UIViewRepresentable {
       let dt: Float
       if let last = lastTimestamp {
         dt = Float(now - last)
-        
+
         // Debug frame timing during summoning
         if isSummoningActiveBinding && frameCounter % 30 == 0 {
           let fps = dt > 0 ? (1.0 / dt) : 0
@@ -1050,34 +1053,26 @@ public struct ARViewContainer: UIViewRepresentable {
         dt = 0  // First frame
       }
       lastTimestamp = now
+      animationTime += dt
 
-      // Angle increment for this frame
-      let anglePerSecond: Float = 2 * .pi / Float(revolutionDuration)
-      accumulatedAngle += anglePerSecond * dt
-
-      // Spin all entities and handle summoning movement
-      let yRot = simd_quatf(angle: accumulatedAngle, axis: [0, 1, 0])
+      // Keep coins upright and add bobbing/spinning animation
+      let uprightRotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
       for entity in coinEntities {
         // Handle summoned entity movement and rotation
         if entity == summoningEntity {
-          // Apply smooth rotation even during summoning
-          if self.objectType == .coin {
-            let xRot = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-            entity.transform.rotation = yRot * xRot
-          } else {
-            entity.transform.rotation = yRot
-          }
-          
+          // Maintain upright orientation while moving
+          entity.transform.rotation = uprightRotation
+
           // Move toward camera only if summoning button is pressed
           if isSummoningActiveBinding, let cameraTransform = arView?.session.currentFrame?.camera.transform {
             let cameraPosition = SIMD3<Float>(
               cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
-            
+
             let currentWorldPosition = entity.position(relativeTo: nil)
             let currentLocalPosition = entity.transform.translation
             let direction = normalize(cameraPosition - currentWorldPosition)
             let distance = simd_distance(currentWorldPosition, cameraPosition)
-            
+
             // Debug logging every 30 frames for detailed analysis
             if frameCounter % 30 == 0 {
               print("🔍 COORDINATE_DEBUG: === Frame \(frameCounter) ===")
@@ -1086,7 +1081,7 @@ public struct ARViewContainer: UIViewRepresentable {
               print("🔍 COORDINATE_DEBUG: Entity Local Pos: \(currentLocalPosition)")
               print("🔍 COORDINATE_DEBUG: Direction Vector: \(direction)")
               print("🔍 COORDINATE_DEBUG: Distance: \(distance)m")
-              
+
               // Check entity's parent hierarchy
               if let parent = entity.parent {
                 print("🔍 COORDINATE_DEBUG: Entity Parent: \(type(of: parent))")
@@ -1095,15 +1090,15 @@ public struct ARViewContainer: UIViewRepresentable {
                 }
               }
             }
-            
+
             // Only move if not too close (stop at 0.3 meters - much closer to camera)
             if distance > 0.3 {
               let moveDistance = summonSpeed * dt  // Move based on frame time
               let newWorldPosition = currentWorldPosition + direction * moveDistance
-              
+
               // FIX: Set world position correctly instead of local translation
               entity.setPosition(newWorldPosition, relativeTo: nil)
-              
+
               // Debug the movement
               if frameCounter % 30 == 0 {
                 print("🎯 SUMMONING: Moving \(moveDistance)m toward camera")
@@ -1116,16 +1111,28 @@ public struct ARViewContainer: UIViewRepresentable {
               autoCollectSummonedEntity(entity)
             }
           }
-          continue  // Skip normal rotation for summoned entity
+          continue  // Skip normal animation for summoned entity
         }
-        
-        // Normal rotation for non-summoned entities
-        if self.objectType == .coin {
-          let xRot = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-          entity.transform.rotation = yRot * xRot
-        } else {
-          entity.transform.rotation = yRot
-        }
+
+        // --- Animation for non-summoned entities ---
+
+        let bobbingSpeed: Float = 2.5  // Controls the speed of the bobbing and spinning
+        let bobbingHeight: Float = 0.05  // The total height of the bobbing in meters (5cm)
+
+        // 1. Bobbing Animation (vertical translation)
+        let yOffset = sin(animationTime * bobbingSpeed) * bobbingHeight
+        entity.transform.translation = SIMD3<Float>(0, yOffset, 0)
+
+        // 2. Spinning Animation (rotation around model's Z-axis)
+        // One full spin (2 * PI) should match one full bob cycle.
+        let spinAngle = self.animationTime * bobbingSpeed
+        let spinRotation = simd_quatf(angle: spinAngle, axis: [0, 0, 1]) // Spin around model's Z-axis
+
+        // 3. Combine Rotations
+        // The final orientation is the combination of the spin and the initial upright rotation.
+        // The order matters: we first apply the spin in the model's local space,
+        // and then apply the upright rotation in the parent's space.
+        entity.transform.rotation = uprightRotation * spinRotation
       }
 
       // Proximity check
@@ -1195,6 +1202,7 @@ public struct ARViewContainer: UIViewRepresentable {
           // Remove from coordinator arrays and mapping
           anchors.remove(at: index)
           let removedEntity = coinEntities.remove(at: index)
+          baseOrientations.removeValue(forKey: removedEntity)
           
           // Only remove from objectLocations if this is a geolocation hunt
           if currentHuntType == .geolocation && index < objectLocations.count {
@@ -1681,6 +1689,7 @@ public struct ARViewContainer: UIViewRepresentable {
       anchor.removeFromParent()
       anchors.remove(at: entityIndex)
       coinEntities.remove(at: entityIndex)
+      baseOrientations.removeValue(forKey: entity)
       if currentHuntType == .geolocation && entityIndex < objectLocations.count {
         objectLocations.remove(at: entityIndex)
       }
@@ -1758,6 +1767,7 @@ public struct ARViewContainer: UIViewRepresentable {
       }
       self.anchors.removeAll()
       self.coinEntities.removeAll()  // Assuming coinEntities are children of these anchors
+      self.baseOrientations.removeAll()
 
       // Clear horizon line but keep it for reuse
       horizonEntity?.removeFromParent()
