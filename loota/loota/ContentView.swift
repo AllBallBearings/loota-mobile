@@ -747,11 +747,11 @@ public struct ContentView: View {
       }
       
     }
-    .onChange(of: selectedObject) { oldValue, newValue in
-      handleSelectedObjectChange(oldValue, newValue)
+    .onChange(of: selectedObject) { newValue in
+      handleSelectedObjectChange(selectedObject, newValue)
     }
-    .onChange(of: showingNamePrompt) { oldValue, newValue in
-      print("🔥 DEBUG: showingNamePrompt changed from \(oldValue) to \(newValue)")
+    .onChange(of: showingNamePrompt) { newValue in
+      print("🔥 DEBUG: showingNamePrompt changed to \(newValue)")
     }
     .onReceive(locationManager.$currentLocation) { location in
       currentLocation = location

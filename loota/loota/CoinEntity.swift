@@ -14,6 +14,84 @@ enum CoinStyle {
 /// Factory for creating a ModelEntity representing a coin (flat disc) standing on its edge.
 enum CoinEntityFactory {
 
+  // MARK: - Cylinder Mesh Generator (iOS 16+ compatible)
+
+  /// Generates a cylinder mesh compatible with iOS 16.0+
+  private static func generateCylinderMesh(height: Float, radius: Float) -> MeshResource {
+    let segments = 32  // Number of segments around the cylinder
+    var vertices: [SIMD3<Float>] = []
+    var normals: [SIMD3<Float>] = []
+    var indices: [UInt32] = []
+
+    let halfHeight = height / 2.0
+
+    // Generate vertices for top and bottom circles
+    for i in 0...segments {
+      let angle = Float(i) * 2.0 * .pi / Float(segments)
+      let x = radius * cos(angle)
+      let z = radius * sin(angle)
+
+      // Top circle
+      vertices.append(SIMD3<Float>(x, halfHeight, z))
+      normals.append(normalize(SIMD3<Float>(x, 0, z)))
+
+      // Bottom circle
+      vertices.append(SIMD3<Float>(x, -halfHeight, z))
+      normals.append(normalize(SIMD3<Float>(x, 0, z)))
+    }
+
+    // Generate side faces
+    for i in 0..<segments {
+      let topLeft = UInt32(i * 2)
+      let bottomLeft = UInt32(i * 2 + 1)
+      let topRight = UInt32((i + 1) * 2)
+      let bottomRight = UInt32((i + 1) * 2 + 1)
+
+      // First triangle
+      indices.append(contentsOf: [topLeft, bottomLeft, topRight])
+      // Second triangle
+      indices.append(contentsOf: [topRight, bottomLeft, bottomRight])
+    }
+
+    // Add top cap center vertex
+    let topCenterIndex = UInt32(vertices.count)
+    vertices.append(SIMD3<Float>(0, halfHeight, 0))
+    normals.append(SIMD3<Float>(0, 1, 0))
+
+    // Add bottom cap center vertex
+    let bottomCenterIndex = UInt32(vertices.count)
+    vertices.append(SIMD3<Float>(0, -halfHeight, 0))
+    normals.append(SIMD3<Float>(0, -1, 0))
+
+    // Add top cap triangles
+    for i in 0..<segments {
+      let current = UInt32(i * 2)
+      let next = UInt32((i + 1) * 2)
+      indices.append(contentsOf: [topCenterIndex, next, current])
+    }
+
+    // Add bottom cap triangles
+    for i in 0..<segments {
+      let current = UInt32(i * 2 + 1)
+      let next = UInt32((i + 1) * 2 + 1)
+      indices.append(contentsOf: [bottomCenterIndex, current, next])
+    }
+
+    // Create mesh descriptor
+    var meshDescriptor = MeshDescriptor()
+    meshDescriptor.positions = MeshBuffers.Positions(vertices)
+    meshDescriptor.normals = MeshBuffers.Normals(normals)
+    meshDescriptor.primitives = .triangles(indices)
+
+    do {
+      return try MeshResource.generate(from: [meshDescriptor])
+    } catch {
+      print("❌ Failed to generate cylinder mesh: \(error)")
+      // Fallback to a simple box
+      return MeshResource.generateBox(size: SIMD3<Float>(radius * 2, height, radius * 2))
+    }
+  }
+
   /// Creates a coin using the CoinPlain.usdz 3D model
   static func makeCoin(
     radius: Float = 0.12,
@@ -58,12 +136,12 @@ enum CoinEntityFactory {
     let container = ModelEntity()
 
     // Center disc (thinner for more visible edge)
-    let centerMesh = MeshResource.generateCylinder(height: centerHeight, radius: centerRadius)
+    let centerMesh = generateCylinderMesh(height: centerHeight, radius: centerRadius)
     let centerMaterial = SimpleMaterial(color: color, isMetallic: true)
     let centerEntity = ModelEntity(mesh: centerMesh, materials: [centerMaterial])
 
     // Outer rim (full height, more prominent)
-    let rimMesh = MeshResource.generateCylinder(height: rimHeight, radius: radius)
+    let rimMesh = generateCylinderMesh(height: rimHeight, radius: radius)
     let rimColor = color.withAlphaComponent(0.9)  // Slightly darker for better contrast
     let rimMaterial = SimpleMaterial(color: rimColor, isMetallic: true)
     let rimEntity = ModelEntity(mesh: rimMesh, materials: [rimMaterial])
@@ -90,12 +168,12 @@ enum CoinEntityFactory {
     let container = ModelEntity()
 
     // Center disc (thinner)
-    let centerMesh = MeshResource.generateCylinder(height: centerHeight, radius: centerRadius)
+    let centerMesh = generateCylinderMesh(height: centerHeight, radius: centerRadius)
     let centerMaterial = SimpleMaterial(color: color, isMetallic: true)
     let centerEntity = ModelEntity(mesh: centerMesh, materials: [centerMaterial])
 
     // Outer rim (full height, more prominent)
-    let rimMesh = MeshResource.generateCylinder(height: rimHeight, radius: radius)
+    let rimMesh = generateCylinderMesh(height: rimHeight, radius: radius)
     let rimColor = color.withAlphaComponent(0.9)
     let rimMaterial = SimpleMaterial(color: rimColor, isMetallic: true)
     let rimEntity = ModelEntity(mesh: rimMesh, materials: [rimMaterial])
@@ -124,18 +202,18 @@ enum CoinEntityFactory {
     let container = ModelEntity()
 
     // Outer rim (full height)
-    let outerRimMesh = MeshResource.generateCylinder(height: rimHeight, radius: radius)
+    let outerRimMesh = generateCylinderMesh(height: rimHeight, radius: radius)
     let outerRimColor = color.withAlphaComponent(0.85)
     let outerRimMaterial = SimpleMaterial(color: outerRimColor, isMetallic: true)
     let outerRimEntity = ModelEntity(mesh: outerRimMesh, materials: [outerRimMaterial])
 
     // Inner rim (mid height for stepped effect)
-    let innerRimMesh = MeshResource.generateCylinder(height: innerRimHeight, radius: innerRimRadius)
+    let innerRimMesh = generateCylinderMesh(height: innerRimHeight, radius: innerRimRadius)
     let innerRimMaterial = SimpleMaterial(color: color, isMetallic: true)
     let innerRimEntity = ModelEntity(mesh: innerRimMesh, materials: [innerRimMaterial])
 
     // Center disc (thinnest)
-    let centerMesh = MeshResource.generateCylinder(height: centerHeight, radius: centerRadius)
+    let centerMesh = generateCylinderMesh(height: centerHeight, radius: centerRadius)
     let centerColor = color.withAlphaComponent(1.0)
     let centerMaterial = SimpleMaterial(color: centerColor, isMetallic: true)
     let centerEntity = ModelEntity(mesh: centerMesh, materials: [centerMaterial])
@@ -164,19 +242,19 @@ enum CoinEntityFactory {
     let container = ModelEntity()
 
     // Outer rim (full height)
-    let rimMesh = MeshResource.generateCylinder(height: rimHeight, radius: radius)
+    let rimMesh = generateCylinderMesh(height: rimHeight, radius: radius)
     let rimColor = color.withAlphaComponent(0.9)
     let rimMaterial = SimpleMaterial(color: rimColor, isMetallic: true)
     let rimEntity = ModelEntity(mesh: rimMesh, materials: [rimMaterial])
 
     // Bevel layer (creates smooth transition)
-    let bevelMesh = MeshResource.generateCylinder(height: bevelHeight, radius: bevelRadius)
+    let bevelMesh = generateCylinderMesh(height: bevelHeight, radius: bevelRadius)
     let bevelColor = color.withAlphaComponent(0.95)
     let bevelMaterial = SimpleMaterial(color: bevelColor, isMetallic: true)
     let bevelEntity = ModelEntity(mesh: bevelMesh, materials: [bevelMaterial])
 
     // Center disc (thinner)
-    let centerMesh = MeshResource.generateCylinder(height: centerHeight, radius: centerRadius)
+    let centerMesh = generateCylinderMesh(height: centerHeight, radius: centerRadius)
     let centerMaterial = SimpleMaterial(color: color, isMetallic: true)
     let centerEntity = ModelEntity(mesh: centerMesh, materials: [centerMaterial])
 

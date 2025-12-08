@@ -4,9 +4,9 @@ The items below still need to be completed or verified before the app can ship t
 
 Bugs
 
-- Joining after entering name and phone sometimes doesn't respond
-- Joining Hunt but then just returns to default screen and ARVIew never loads
-- collected count goes from 1 to 0
+- Joining after entering name and phone, sometimes doesn't respond
+- Joining Hunt but then just returns to default screen and ARVIew never loads or it loads with the horizon line and loot positioned on the screen in a vertical orientation with the horizon line running from the top of the device screen to the bottom yet the HUD of the app is still correctly in portrait mode
+- collected count goes from 1 to 0 occasionally when players collect loot
 
 ## Immediate Blockers
 

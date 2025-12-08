@@ -695,10 +695,60 @@ public struct ARViewContainer: UIViewRepresentable {
 
       let labelEntity = ModelEntity(mesh: textMesh, materials: [material])
 
-      // Add BillboardComponent to make the text always face the camera
-      labelEntity.components.set(BillboardComponent())
+      // Mark label with name so we can find it for billboard updates
+      labelEntity.name = "billboard_label"
 
       return labelEntity
+    }
+
+    // Helper to update all billboard labels and glow effects to face the camera
+    private func updateBillboardLabels(cameraTransform: simd_float4x4) {
+      let cameraPosition = SIMD3<Float>(
+        cameraTransform.columns.3.x,
+        cameraTransform.columns.3.y,
+        cameraTransform.columns.3.z
+      )
+
+      // Iterate through all anchors and find billboard labels
+      for anchor in anchors {
+        for child in anchor.children {
+          if child.name == "billboard_label", let labelEntity = child as? ModelEntity {
+            // Get label's world position
+            let labelWorldPosition = labelEntity.position(relativeTo: nil)
+
+            // Calculate direction from label to camera
+            let toCamera = cameraPosition - labelWorldPosition
+
+            // Calculate rotation to face camera (only rotate around Y axis to keep text upright)
+            let angle = atan2(toCamera.x, toCamera.z)
+            let billboardRotation = simd_quatf(angle: angle, axis: [0, 1, 0])
+
+            // Apply rotation in local space
+            labelEntity.transform.rotation = billboardRotation
+          }
+        }
+      }
+
+      // Update glow effect billboards on coin entities
+      for entity in coinEntities {
+        for child in entity.children {
+          if let glowEntity = child as? ModelEntity,
+             (glowEntity.name == "glow_outer_billboard" || glowEntity.name == "glow_inner_billboard") {
+            // Get glow's world position
+            let glowWorldPosition = glowEntity.position(relativeTo: nil)
+
+            // Calculate direction from glow to camera
+            let toCamera = cameraPosition - glowWorldPosition
+
+            // Calculate rotation to face camera (only rotate around Y axis)
+            let angle = atan2(toCamera.x, toCamera.z)
+            let billboardRotation = simd_quatf(angle: angle, axis: [0, 1, 0])
+
+            // Apply rotation in local space
+            glowEntity.transform.rotation = billboardRotation
+          }
+        }
+      }
     }
 
     // Helper to create horizon line entity as a continuous 360-degree torus
@@ -1054,6 +1104,11 @@ public struct ARViewContainer: UIViewRepresentable {
       }
       lastTimestamp = now
       animationTime += dt
+
+      // Update billboard labels to face camera (get camera transform first)
+      if let arView = arView, let cameraTransform = arView.session.currentFrame?.camera.transform {
+        updateBillboardLabels(cameraTransform: cameraTransform)
+      }
 
       // Keep coins upright and add bobbing/spinning animation
       let uprightRotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
@@ -1449,18 +1504,16 @@ public struct ARViewContainer: UIViewRepresentable {
         mesh: MeshResource.generatePlane(width: baseDiameter * 1.6, depth: baseDiameter * 1.6),
         materials: [outerMaterial]
       )
-      outerPlane.name = "glow_outer"
+      outerPlane.name = "glow_outer_billboard"  // Mark for manual billboard update
       outerPlane.position = .zero
-      outerPlane.components.set(BillboardComponent())
 
       // Inner tighter ring
       let innerPlane = ModelEntity(
         mesh: MeshResource.generatePlane(width: baseDiameter, depth: baseDiameter),
         materials: [innerMaterial]
       )
-      innerPlane.name = "glow_inner"
+      innerPlane.name = "glow_inner_billboard"  // Mark for manual billboard update
       innerPlane.position = .zero
-      innerPlane.components.set(BillboardComponent())
 
       entity.addChild(outerPlane)
       entity.addChild(innerPlane)
@@ -1470,7 +1523,7 @@ public struct ARViewContainer: UIViewRepresentable {
     private func removeGlowEffect(from entity: ModelEntity) {
       // Find and remove glow planes from entity
       for child in entity.children {
-        if child.name == "glow_outer" || child.name == "glow_inner" {
+        if child.name == "glow_outer_billboard" || child.name == "glow_inner_billboard" {
           child.removeFromParent()
           print("✨ GLOW: Removed glow effect")
         }
