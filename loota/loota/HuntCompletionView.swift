@@ -494,7 +494,7 @@ struct JoinHuntView: View {
                             )
                     )
                     .foregroundColor(LootaTheme.textPrimary)
-                    .onChange(of: participantPhone) { _, newValue in
+                    .onChange(of: participantPhone) { newValue in
                         participantPhone = newValue.formattedPhoneNumber()
                     }
             }
