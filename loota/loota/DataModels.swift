@@ -100,6 +100,73 @@ public struct HuntData: Codable {
   public let winner: UserInfo?
   public let winnerContact: WinnerContact?
   public let creatorContact: CreatorContact?
+
+  // Regular initializer for creating instances manually (e.g., in previews)
+  public init(
+    id: String,
+    name: String?,
+    description: String?,
+    type: HuntType,
+    winnerId: String?,
+    createdAt: String?,
+    updatedAt: String?,
+    creatorId: String?,
+    pins: [PinData],
+    isCompleted: Bool?,
+    completedAt: String?,
+    participants: [ParticipantData],
+    creator: UserInfo?,
+    winner: UserInfo?,
+    winnerContact: WinnerContact?,
+    creatorContact: CreatorContact?
+  ) {
+    self.id = id
+    self.name = name
+    self.description = description
+    self.type = type
+    self.winnerId = winnerId
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.creatorId = creatorId
+    self.pins = pins
+    self.isCompleted = isCompleted
+    self.completedAt = completedAt
+    self.participants = participants
+    self.creator = creator
+    self.winner = winner
+    self.winnerContact = winnerContact
+    self.creatorContact = creatorContact
+  }
+
+  // Custom decoder to handle null arrays
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    name = try container.decodeIfPresent(String.self, forKey: .name)
+    description = try container.decodeIfPresent(String.self, forKey: .description)
+    type = try container.decode(HuntType.self, forKey: .type)
+    winnerId = try container.decodeIfPresent(String.self, forKey: .winnerId)
+    createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+    updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+    creatorId = try container.decodeIfPresent(String.self, forKey: .creatorId)
+
+    // Handle potentially null arrays - default to empty array if null
+    pins = (try? container.decode([PinData].self, forKey: .pins)) ?? []
+    participants = (try? container.decode([ParticipantData].self, forKey: .participants)) ?? []
+
+    isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted)
+    completedAt = try container.decodeIfPresent(String.self, forKey: .completedAt)
+    creator = try container.decodeIfPresent(UserInfo.self, forKey: .creator)
+    winner = try container.decodeIfPresent(UserInfo.self, forKey: .winner)
+    winnerContact = try container.decodeIfPresent(WinnerContact.self, forKey: .winnerContact)
+    creatorContact = try container.decodeIfPresent(CreatorContact.self, forKey: .creatorContact)
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, name, description, type, winnerId, createdAt, updatedAt, creatorId
+    case pins, isCompleted, completedAt, participants, creator, winner
+    case winnerContact, creatorContact
+  }
 }
 
 public struct ParticipantData: Codable {
