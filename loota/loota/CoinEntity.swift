@@ -1,5 +1,6 @@
 // CoinEntity.swift
 
+import Combine
 import RealityKit
 import UIKit
 
@@ -13,6 +14,54 @@ enum CoinStyle {
 
 /// Factory for creating a ModelEntity representing a coin (flat disc) standing on its edge.
 enum CoinEntityFactory {
+  private static var cachedCoinModel: ModelEntity?
+  private static var coinModelCancellable: AnyCancellable?
+  private static var isLoadingCoinModel = false
+  private static var didFailLoadingCoinModel = false
+
+  static var isCoinModelReady: Bool {
+    return cachedCoinModel != nil
+  }
+
+  static var isCoinModelLoading: Bool {
+    return isLoadingCoinModel
+  }
+
+  static var shouldDeferPlacementForCoinModel: Bool {
+    return cachedCoinModel == nil && !didFailLoadingCoinModel
+  }
+
+  static func preloadCoinModel(completion: ((Bool) -> Void)? = nil) {
+    if cachedCoinModel != nil {
+      completion?(true)
+      return
+    }
+    if isLoadingCoinModel || didFailLoadingCoinModel {
+      completion?(false)
+      return
+    }
+
+    isLoadingCoinModel = true
+    coinModelCancellable = ModelEntity.loadModelAsync(named: "CoinPlain")
+      .sink(
+        receiveCompletion: { completionResult in
+          switch completionResult {
+          case .finished:
+            break
+          case .failure(let error):
+            print("❌ COIN_MODEL: Async load failed: \(error)")
+            didFailLoadingCoinModel = true
+            isLoadingCoinModel = false
+            completion?(false)
+          }
+        },
+        receiveValue: { model in
+          cachedCoinModel = model
+          isLoadingCoinModel = false
+          completion?(true)
+        }
+      )
+  }
 
   // MARK: - Cylinder Mesh Generator (iOS 16+ compatible)
 
@@ -99,30 +148,30 @@ enum CoinEntityFactory {
     color: UIColor = .yellow,
     style: CoinStyle = .classic
   ) -> ModelEntity {
-    do {
-      // Load the CoinPlain.usdz model
-      let coinModel = try ModelEntity.loadModel(named: "CoinPlain")
+    if let cachedModel = cachedCoinModel {
+      // Clone the cached model to avoid shared state.
+      let coinModel = cachedModel.clone(recursive: true)
 
       // Scale to match the approximate size of the original coin
       // The original coin had a radius of 0.12m and height of 0.02m
       // We'll scale the model to achieve similar visual size
       coinModel.scale = SIMD3<Float>(repeating: 0.12)
+      coinModel.name = "coin_model"
 
-      // Rotate the model to stand upright on its edge.
-      // Blender (where the model was made) uses a Z-up coordinate system,
-      // while RealityKit uses a Y-up system. A 90-degree rotation
-      // around the X-axis corrects for this difference, making the coin stand vertically.
-      coinModel.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+      // Keep the USDZ model's authored orientation.
 
       // Z-axis rotation (spinning) will be applied in ARViewContainer.
 
       return coinModel
-    } catch {
-      print("❌ COIN_MODEL: Error loading CoinPlain.usdz: \(error)")
-      print("❌ COIN_MODEL: Falling back to procedural coin generation")
-      // Fallback to procedural generation if model fails to load
-      return makeClassicCoin(radius: radius, height: height, color: color)
     }
+
+    if !isLoadingCoinModel && !didFailLoadingCoinModel {
+      preloadCoinModel()
+    }
+
+    print("⚠️ COIN_MODEL: USDZ not ready yet - using procedural fallback")
+    // Fallback to procedural generation if model isn't loaded yet
+    return makeClassicCoin(radius: radius, height: height, color: color)
   }
 
   // MARK: - Classic Coin (20% rim width, prominent embossing)

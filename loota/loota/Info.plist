@@ -14,5 +14,13 @@
 	<string>AYOYloSpuBCcwAz5xMFs6Iei/e4UXrBsTmr8jAj063KWcFn46m5Jzj+FNq2hAYdD</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 </dict>
 </plist>

@@ -373,17 +373,10 @@ public class HuntDataManager: ObservableObject {
     print("DEBUG: HuntDataManager - joinHunt: Current userName: '\(self.userName ?? "nil")'")
     print("DEBUG: HuntDataManager - joinHunt: Current userId: '\(self.userId ?? "nil")'")
     
-    // If we have a userId, first check if the database name matches our local name
-    if let userId = self.userId {
-      print("DEBUG: HuntDataManager - joinHunt: Checking database name for existing user")
-      self.checkAndSyncUserName(userId: userId) { [weak self] in
-        guard let self = self else { return }
-        self.proceedWithJoinHunt(huntId: huntId, phoneNumber: phoneNumber)
-      }
-    } else {
-      // No userId, proceed with normal registration
-      self.proceedWithJoinHunt(huntId: huntId, phoneNumber: phoneNumber)
-    }
+    // Optimization: Skip blocking name sync check. 
+    // If we have a userId, we proceed directly to join.
+    // Name syncing is handled by initializeUserData (on launch) or setUserName (when changed).
+    self.proceedWithJoinHunt(huntId: huntId, phoneNumber: phoneNumber)
   }
   
   private func proceedWithJoinHunt(huntId: String, phoneNumber: String) {

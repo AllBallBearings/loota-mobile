@@ -21,7 +21,9 @@ public struct ContentView: View {
   @State private var nearestLootDirection: Float = 0 // Angle in radians relative to camera forward
   @State private var smoothedCompassAngle: Float = 0 // Smoothed angle for display
   @State private var isDebugMode: Bool = false
-  @State private var showHorizonLine: Bool = true
+  @State private var showHorizonLine: Bool = false
+  @State private var isPerformanceMode: Bool = false
+  @State private var showGiftCardTest: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -35,9 +37,18 @@ public struct ContentView: View {
   @State private var userConfirmedHunt = false
   @State private var confirmedHuntId: String? = nil
   @State private var isLoadingLoot = false
+  @State private var isLoadingModels = false
 
   public init() {
     print("DEBUG: ContentView - init() called.")
+  }
+
+  private var showSimulatorPreview: Bool {
+    #if targetEnvironment(simulator)
+    return ProcessInfo.processInfo.arguments.contains("SIMULATOR_COIN")
+    #else
+    return false
+    #endif
   }
 
   // Computed property to calculate remaining loot count
@@ -83,42 +94,55 @@ public struct ContentView: View {
   }
 
   public var body: some View {
-    ZStack {
-      LootaTheme.backgroundGradient
-        .ignoresSafeArea()
-      
-      // Show splash screen first
-      if showingSplash {
-        SplashScreen()
-          .transition(.opacity)
-      }
-      // Main app content (always present after splash)
-      else {
-        mainAppContent
-          .disabled(isInitializing || isLoadingLoot || huntDataManager.isFetchingHunt) // Disable interaction during loading
-        
-        // Loading indicator overlays
-        if isInitializing {
-          LoadingIndicator(message: "Initializing Hunt...", showProgress: true, subtitle: "Please wait while we prepare your adventure")
-            .transition(.opacity)
-        } else if huntDataManager.isFetchingHunt {
-          LoadingIndicator(message: "Summoning Hunt Map...", showProgress: true, subtitle: "Fetching treasure details from Loota HQ")
-            .transition(.opacity)
-        } else if isLoadingLoot {
-          LoadingIndicator(message: "Loading Loot...", showProgress: true, subtitle: "Joining hunt and preparing AR treasures")
-            .transition(.opacity)
+    Group {
+      if showSimulatorPreview {
+        ZStack {
+          LootaTheme.backgroundGradient
+            .ignoresSafeArea()
+          CoinSimulatorView()
         }
-      }
-    }
-    .onAppear {
-      // Show splash for 2 seconds, then start initialization
-      DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-        withAnimation(.easeInOut(duration: 0.5)) {
-          showingSplash = false
+      } else {
+        ZStack {
+          LootaTheme.backgroundGradient
+            .ignoresSafeArea()
+
+          // Show splash screen first
+          if showingSplash {
+            SplashScreen()
+              .transition(.opacity)
+          }
+          // Main app content (always present after splash)
+          else {
+            mainAppContent
+              .disabled(isInitializing || isLoadingLoot || isLoadingModels || huntDataManager.isFetchingHunt) // Disable interaction during loading
+
+            // Loading indicator overlays
+            if isInitializing {
+              LoadingIndicator(message: "Initializing Hunt...", showProgress: true, subtitle: "Please wait while we prepare your adventure")
+                .transition(.opacity)
+            } else if huntDataManager.isFetchingHunt {
+              LoadingIndicator(message: "Summoning Hunt Map...", showProgress: true, subtitle: "Fetching treasure details from Loota HQ")
+                .transition(.opacity)
+            } else if isLoadingLoot {
+              LoadingIndicator(message: "Loading Loot...", showProgress: true, subtitle: "Joining hunt and preparing AR treasures")
+                .transition(.opacity)
+            } else if isLoadingModels {
+              LoadingIndicator(message: "Preparing AR Models...", showProgress: true, subtitle: "Loading 3D treasures for augmented reality")
+                .transition(.opacity)
+            }
+          }
         }
-        
-        // Start app initialization after splash
-        initializeApp()
+        .onAppear {
+          // Show splash for 2 seconds, then start initialization
+          DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+              showingSplash = false
+            }
+
+            // Start app initialization after splash
+            initializeApp()
+          }
+        }
       }
     }
   }
@@ -172,7 +196,9 @@ public struct ContentView: View {
           nearestLootDistance: $nearestLootDistance,
           nearestLootDirection: $nearestLootDirection,
           isDebugMode: $isDebugMode,
-          showHorizonLine: $showHorizonLine
+          showHorizonLine: $showHorizonLine,
+          isPerformanceMode: $isPerformanceMode,
+          isLoadingModels: $isLoadingModels
         )
         // Use a stable ID that doesn't change during active gameplay
         .id("ar-view-\(currentHuntType?.rawValue ?? "none")")
@@ -673,6 +699,64 @@ public struct ContentView: View {
               )
             }
 
+            Button(action: {
+              isPerformanceMode.toggle()
+            }) {
+              HStack(spacing: 12) {
+                Image(systemName: "speedometer")
+                  .foregroundColor(isPerformanceMode ? LootaTheme.warning : LootaTheme.neonCyan)
+                  .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("Perf Mode")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(LootaTheme.textPrimary)
+                  Text(isPerformanceMode ? "Reduced updates" : "Full updates")
+                    .font(.caption)
+                    .foregroundColor(isPerformanceMode ? LootaTheme.warning : LootaTheme.textSecondary)
+                }
+                Spacer()
+              }
+              .padding(.vertical, 10)
+              .padding(.horizontal, 12)
+              .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                  .fill(Color.white.opacity(0.08))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                  )
+              )
+            }
+
+            Button(action: {
+              showGiftCardTest = true
+            }) {
+              HStack(spacing: 12) {
+                Image(systemName: "creditcard.viewfinder")
+                  .foregroundColor(LootaTheme.cosmicPurple)
+                  .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("Gift Card Test")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(LootaTheme.textPrimary)
+                  Text("Test orientation")
+                    .font(.caption)
+                    .foregroundColor(LootaTheme.textSecondary)
+                }
+                Spacer()
+              }
+              .padding(.vertical, 10)
+              .padding(.horizontal, 12)
+              .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                  .fill(Color.white.opacity(0.08))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                  )
+              )
+            }
+
             if !errorMessage.isEmpty {
               HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -810,8 +894,11 @@ public struct ContentView: View {
         }
       }
     }
+    .fullScreenCover(isPresented: $showGiftCardTest) {
+      GiftCardTestView()
+    }
   }
-  
+
   private func initializeApp() {
     print("ContentView initializeApp: Starting app initialization.")
     locationManager.requestAuthorization()
