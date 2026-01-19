@@ -49,8 +49,9 @@ extension ARViewContainer.Coordinator {
     // Calculate horizontal distance from reference point
     let horizontalDistance: Double = sqrt(deltaNorth * deltaNorth + deltaEast * deltaEast)
 
-    // Adjusted to appear ~4 feet from user perspective
-    let objectHeight: Float = 0.0
+    // Place coins at waist level (~0.9m below camera/eye height)
+    // This brings them down from head level to approximately waist height
+    let objectHeight: Float = -0.9
 
     if frameCounter % 300 == 0 {
       print("🗺️ GPS_CONVERSION: Dist: \(horizontalDistance)m, AR Pos: (\(deltaEast), \(objectHeight), \(-deltaNorth))")

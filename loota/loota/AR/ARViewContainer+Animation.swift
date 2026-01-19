@@ -6,6 +6,9 @@ import RealityKit
 extension ARViewContainer.Coordinator {
   @objc func updateRotation(displayLink: CADisplayLink) {
     let frameStartTime = CACurrentMediaTime()
+    let previousFrameTime = lastTimestamp ?? frameStartTime
+    let deltaTime = Float(max(0, frameStartTime - previousFrameTime))
+    lastTimestamp = frameStartTime
 
     frameCounter += 1
 
@@ -72,8 +75,6 @@ extension ARViewContainer.Coordinator {
       }
     }
 
-    // Animations disabled to isolate placement/orientation issues.
-
     let collectionCheckInterval = isPerformanceMode ? 6 : 3
     let shouldCheckCollection = isSummoningActiveBinding || (frameCounter % collectionCheckInterval == 0)
     if !shouldCheckCollection {
@@ -88,20 +89,53 @@ extension ARViewContainer.Coordinator {
       cameraTransform.columns.3.y,
       cameraTransform.columns.3.z)
 
+    if isSummoningActiveBinding {
+      if summoningEntity == nil {
+        startObjectSummoning()
+      }
+
+      if let entity = summoningEntity, deltaTime > 0 {
+        let entityPosition = entity.position(relativeTo: nil)
+        let toCamera = cameraPosition - entityPosition
+        let distance = simd_length(toCamera)
+
+        if distance > 0.01 {
+          let direction = normalize(toCamera)
+          let step = min(distance, summonSpeed * deltaTime)
+          let newPosition = entityPosition + (direction * step)
+          entity.setPosition(newPosition, relativeTo: nil)
+        }
+      }
+    } else if summoningEntity != nil {
+      stopObjectSummoning()
+    }
+
     if isDebugMode && frameCounter % 300 == 0 && isSummoningActiveBinding {
       print("🔍 COLLECTION_DEBUG: Anchors: \(anchors.count), Entities: \(coinEntities.count)")
     }
 
     let maxCollectionChecksPerFrame = isPerformanceMode ? 5 : 15
-    var checksPerformed = 0
+    let totalEntities = min(anchors.count, coinEntities.count)
+    if totalEntities == 0 {
+      return
+    }
 
-    for index in anchors.indices.reversed() {
-      if checksPerformed >= maxCollectionChecksPerFrame && !isSummoningActiveBinding {
-        break
-      }
-      checksPerformed += 1
-      guard index < coinEntities.count else {
-        print("⚠️ COLLECTION_DEBUG: Index \(index) out of bounds for coinEntities (count: \(coinEntities.count))")
+    let checksThisFrame = isSummoningActiveBinding
+      ? totalEntities
+      : min(maxCollectionChecksPerFrame, totalEntities)
+
+    var indicesToCheck: [Int] = []
+    indicesToCheck.reserveCapacity(checksThisFrame)
+    var cursor = collectionCheckCursor
+    for _ in 0..<checksThisFrame {
+      indicesToCheck.append(cursor % totalEntities)
+      cursor += 1
+    }
+    collectionCheckCursor = totalEntities > 0 ? cursor % totalEntities : 0
+
+    for index in indicesToCheck.sorted(by: >) {
+      guard index < anchors.count, index < coinEntities.count else {
+        print("⚠️ COLLECTION_DEBUG: Index \(index) out of bounds (anchors: \(anchors.count), entities: \(coinEntities.count))")
         continue
       }
 
@@ -112,7 +146,7 @@ extension ARViewContainer.Coordinator {
       let distance = simd_distance(cameraPosition, entityWorldPosition)
 
       let normalCollectionDistance: Float = 0.25
-      let summonedCollectionDistance: Float = 0.8
+      let summonedCollectionDistance: Float = 0.15  // ~6 inches - right in user's face
       let isSummonedObject = (entity == summoningEntity)
       let collectionThreshold =
         isSummonedObject ? summonedCollectionDistance : normalCollectionDistance
@@ -123,6 +157,7 @@ extension ARViewContainer.Coordinator {
 
       if distance < collectionThreshold {
         if isSummonedObject {
+          autoCollectSummonedEntity(entity)
           continue
         }
 

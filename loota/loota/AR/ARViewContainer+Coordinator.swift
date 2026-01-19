@@ -45,9 +45,10 @@ extension ARViewContainer {
     public var summoningEntity: ModelEntity?
     public var originalEntityPosition: SIMD3<Float>?
     public var summonStartTime: CFTimeInterval?
-    public let summonSpeed: Float = 0.8
+    public let summonSpeed: Float = 1.2  // Increased for more dramatic approach
     public let proximityThreshold: Float = 30.48
     public var collectedEntities: Set<ModelEntity> = []
+    public var collectionCheckCursor: Int = 0
     public var frameCounter: Int = 0
     public var lastFocusUpdateTime: Date = Date()
 

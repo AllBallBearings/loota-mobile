@@ -14,6 +14,7 @@ public struct ContentView: View {
   @State private var pinData: [PinData] = []
   @State private var statusMessage: String = ""
   @State private var currentHuntType: HuntType?
+  @State private var currentHuntId: String?
   @State private var isSummoningActive: Bool = false
   @State private var focusedLootId: String? = nil
   @State private var focusedLootDistance: Float? = nil
@@ -24,6 +25,7 @@ public struct ContentView: View {
   @State private var showHorizonLine: Bool = false
   @State private var isPerformanceMode: Bool = false
   @State private var showGiftCardTest: Bool = false
+  @State private var showCoinAnimationDebug: Bool = false
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -62,7 +64,12 @@ public struct ContentView: View {
   // Computed property for total coins collected by current user
   private var totalCoinsCollected: Int {
     guard let huntData = huntDataManager.huntData, let userId = huntDataManager.userId else { return 0 }
-    return huntData.pins.filter { $0.collectedByUserId == userId }.count + coinsCollectedThisSession
+    let serverCollected = Set<String>(huntData.pins.compactMap { pin in
+      guard pin.collectedByUserId == userId else { return nil }
+      return pin.id
+    })
+    let localCollected = huntDataManager.collectedPinIDsSnapshot
+    return serverCollected.union(localCollected).count
   }
 
   // Smooth compass angle changes
@@ -145,8 +152,11 @@ public struct ContentView: View {
         }
       }
     }
+    .sheet(isPresented: $showCoinAnimationDebug) {
+      CoinAnimationDebugView()
+    }
   }
-  
+
   private var mainAppContent: some View {
     ZStack {
       // Main container ZStack
@@ -757,6 +767,36 @@ public struct ContentView: View {
               )
             }
 
+            // Coin Animation Debug Button
+            Button(action: {
+              showCoinAnimationDebug = true
+            }) {
+              HStack(spacing: 12) {
+                Image(systemName: "play.circle.fill")
+                  .foregroundColor(LootaTheme.neonCyan)
+                  .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("Coin Animation Test")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(LootaTheme.textPrimary)
+                  Text("Test CoinSmooth USDZ")
+                    .font(.caption)
+                    .foregroundColor(LootaTheme.textSecondary)
+                }
+                Spacer()
+              }
+              .padding(.vertical, 10)
+              .padding(.horizontal, 12)
+              .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                  .fill(Color.white.opacity(0.08))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                  )
+              )
+            }
+
             if !errorMessage.isEmpty {
               HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -1041,9 +1081,11 @@ public struct ContentView: View {
     self.currentHuntType = huntData.type
     self.statusMessage = ""  // Clear any previous error messages
 
-    // Reset session counter when loading a new hunt
-    self.coinsCollectedThisSession = 0
-    print("ContentView loadHuntData: Reset session counter. Total user collected: \(totalCoinsCollected)")
+    if currentHuntId != huntData.id {
+      currentHuntId = huntData.id
+      self.coinsCollectedThisSession = 0
+      print("ContentView loadHuntData: Reset session counter. Total user collected: \(totalCoinsCollected)")
+    }
 
     switch huntData.type {
     case .geolocation:

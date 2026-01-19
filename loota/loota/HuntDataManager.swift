@@ -59,6 +59,10 @@ public class HuntDataManager: ObservableObject {
   public var isUserNameMissing: Bool {
     userName == nil || userName?.isEmpty == true || userName == "Anonymous"
   }
+
+  public var collectedPinIDsSnapshot: Set<String> {
+    collectedPinIDs
+  }
   
   public var shouldPromptForName: Bool {
     // Prompt for name if user has no name OR if they have a userId but the local name suggests they were registered as Anonymous

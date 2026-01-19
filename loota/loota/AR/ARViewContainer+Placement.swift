@@ -67,9 +67,10 @@ extension ARViewContainer.Coordinator {
     }
   }
 
-  // PRE-CLONE entities on background thread (this is the expensive part)
+  // Create entities on main thread (RealityKit entities should be created on main thread)
   private func preCloneEntitiesForGeolocation(count: Int, completion: @escaping ([ModelEntity?]) -> Void) {
-    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+    // RealityKit entities must be created and manipulated on the main thread
+    DispatchQueue.main.async { [weak self] in
       guard let self = self else { return }
       var entities: [ModelEntity?] = []
 
@@ -78,7 +79,6 @@ extension ARViewContainer.Coordinator {
         let pin = index < self.pinData.count ? self.pinData[index] : nil
         let lootType = pin?.objectType ?? self.objectType
 
-        // This is the SLOW part - do it on background thread
         let entity = self.createEntity(for: lootType)
         entities.append(entity)
 
@@ -92,14 +92,13 @@ extension ARViewContainer.Coordinator {
         print("✅ PRE_CLONE: All \(count) entities cloned in \(String(format: "%.3f", totalTime))s")
       }
 
-      DispatchQueue.main.async {
-        completion(entities)
-      }
+      completion(entities)
     }
   }
 
   private func preCloneEntitiesForProximity(count: Int, completion: @escaping ([ModelEntity?]) -> Void) {
-    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+    // RealityKit entities must be created and manipulated on the main thread
+    DispatchQueue.main.async { [weak self] in
       guard let self = self else { return }
       var entities: [ModelEntity?] = []
 
@@ -121,13 +120,11 @@ extension ARViewContainer.Coordinator {
         print("✅ PRE_CLONE: All \(count) entities cloned in \(String(format: "%.3f", totalTime))s")
       }
 
-      DispatchQueue.main.async {
-        completion(entities)
-      }
+      completion(entities)
     }
   }
 
-  // FAST placement using pre-cloned entities (no main thread blocking!)
+  // Placement using pre-cloned entities
   private func placeGeolocationObjectsWithPreclonedEntities(arView: ARView, refLoc: CLLocationCoordinate2D, locations: [CLLocationCoordinate2D], entities: [ModelEntity?]) {
     let totalObjects = locations.count
     var placedCount = 0
@@ -189,6 +186,9 @@ extension ARViewContainer.Coordinator {
         arView.scene.addAnchor(objectAnchor)
       }
 
+      // Start animations now that entity is in the scene
+      CoinEntityFactory.startAnimations(on: entity)
+
       self.anchors.append(objectAnchor)
       placedCount += 1
 
@@ -230,7 +230,8 @@ extension ARViewContainer.Coordinator {
 
       let x_local = Float(marker.dist * sin(Double(markerAngleRadians)))
       let z_local = Float(-marker.dist * cos(Double(markerAngleRadians)))
-      let objectHeight: Float = 0.0
+      // Place coins at waist level (~0.9m below camera/eye height)
+      let objectHeight: Float = -0.9
       let arPositionInBaseFrame = SIMD3<Float>(x_local, objectHeight, z_local)
 
       let objectAnchor = AnchorEntity()
@@ -269,6 +270,9 @@ extension ARViewContainer.Coordinator {
       } else {
         arView.scene.addAnchor(objectAnchor)
       }
+
+      // Start animations now that entity is in the scene
+      CoinEntityFactory.startAnimations(on: entity)
 
       self.anchors.append(objectAnchor)
       placedCount += 1
