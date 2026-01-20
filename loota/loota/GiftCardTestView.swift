@@ -175,7 +175,7 @@ struct GiftCardTestARView: UIViewRepresentable {
         var axesEntity: Entity?
 
         func loadGiftCard() {
-            guard let anchor = anchor else { return }
+            guard anchor != nil else { return }
 
             // Preload and create gift card
             GiftCardEntityFactory.preloadGiftCardModel { [weak self] success in

@@ -99,7 +99,7 @@ extension ARViewContainer.Coordinator {
 
   // PERFORMANCE FIX: Async horizon setup to avoid blocking main thread
   func setupHorizonLineAsync(in arView: ARView) {
-    guard isDebugMode, showHorizonLineBinding, horizonEntity == nil, let baseAnchor = baseAnchor else {
+    guard isDebugMode, showHorizonLineBinding, horizonEntity == nil, baseAnchor != nil else {
       print("🌅 HORIZON_ASYNC: Skipping - debug: \(isDebugMode), showHorizonLine: \(showHorizonLineBinding), horizonEntity exists: \(horizonEntity != nil), baseAnchor exists: \(baseAnchor != nil)")
       return
     }
@@ -187,7 +187,7 @@ extension ARViewContainer.Coordinator {
       print("🌅 HORIZON_UPDATE: Horizon local pos: \(horizon.position)")
       print("🌅 HORIZON_UPDATE: Horizon world pos: \(horizon.position(relativeTo: nil))")
       print("🌅 HORIZON_UPDATE: Horizon enabled: \(horizon.isEnabled)")
-      print("🌅 HORIZON_UPDATE: Continuous torus entity: \(horizon.name ?? "unnamed")")
+      print("🌅 HORIZON_UPDATE: Continuous torus entity: \(horizon.name)")
     }
   }
 

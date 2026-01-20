@@ -41,10 +41,12 @@ class LocationManager: NSObject, ObservableObject {
         }
         
         func startUpdating() {
-            if CLLocationManager.locationServicesEnabled() {
-                locationManager.startUpdatingLocation()
-                locationManager.startUpdatingHeading()
-            }
+            // Start location updates directly - authorization is already checked
+            // by the caller (locationManagerDidChangeAuthorization)
+            // Note: Avoid calling CLLocationManager.locationServicesEnabled() on main thread
+            // as it can cause UI unresponsiveness
+            locationManager.startUpdatingLocation()
+            locationManager.startUpdatingHeading()
         }
 }
 

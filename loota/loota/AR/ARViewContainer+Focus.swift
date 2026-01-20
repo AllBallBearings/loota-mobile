@@ -7,9 +7,14 @@ extension ARViewContainer.Coordinator {
 
   func setupFocusDetection() {
     print("🎯 FOCUS_DETECTION: Setting up loot focus detection")
-    isSummoningActiveBinding = false
-    focusedLootIdBinding = nil
-    print("🎯 FOCUS_DETECTION: Ready - aim at loot to focus")
+    // Defer state modification to avoid "modifying state during view update" warning
+    // This happens because setupFocusDetection is called from init, which runs during
+    // SwiftUI's makeCoordinator() call within the view update cycle
+    DispatchQueue.main.async { [weak self] in
+      self?.isSummoningActiveBinding = false
+      self?.focusedLootIdBinding = nil
+      print("🎯 FOCUS_DETECTION: Ready - aim at loot to focus")
+    }
   }
 
   func updateFocusDetection() {

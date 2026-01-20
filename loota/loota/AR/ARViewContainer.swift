@@ -144,7 +144,7 @@ public struct ARViewContainer: UIViewRepresentable {
 
       // Wait for camera to stabilize before attempting placement
       DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-        if let frame = arView.session.currentFrame {
+        if arView.session.currentFrame != nil {
           print("🎥 AR_SETUP: Attempting object placement after 3s delay")
           context.coordinator.statusMessage = "AR Ready - Looking for objects..."
           context.coordinator.attemptPlacementIfReady()

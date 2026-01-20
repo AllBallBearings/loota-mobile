@@ -213,7 +213,7 @@ extension ARViewContainer.Coordinator {
 
     let worldUp = SIMD3<Float>(0, 1, 0)
     var toEntityFlat = toEntity - simd_dot(toEntity, worldUp) * worldUp
-    var forwardVector = SIMD3<Float>(
+    let forwardVector = SIMD3<Float>(
       -cameraTransform.columns.2.x,
       -cameraTransform.columns.2.y,
       -cameraTransform.columns.2.z
