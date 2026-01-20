@@ -72,7 +72,33 @@ extension ARViewContainer.Coordinator {
       }
     }
 
-    // Animations disabled to isolate placement/orientation issues.
+    // Bobbing and spinning animation for coins
+    let bobHeight: Float = 0.3048  // 1 foot in meters
+    let bobCycleDuration: Float = 2.0  // seconds for one complete bob cycle (up and down)
+    let deltaTime = Float(displayLink.duration)
+    animationTime += deltaTime
+
+    // Calculate bob position using sine wave (0 to 1 to 0 to -1 to 0)
+    let bobPhase = animationTime / bobCycleDuration * 2.0 * .pi
+    let bobOffset = sin(bobPhase) * bobHeight / 2.0  // Half height for amplitude
+
+    // Calculate spin rotation - half spin (π radians) per bob cycle
+    // When bobPhase goes from 0 to 2π, spin goes from 0 to π (half rotation)
+    let spinAngle = (animationTime / bobCycleDuration) * .pi
+
+    for entity in coinEntities {
+      guard !collectedEntities.contains(entity) else { continue }
+      guard entity != summoningEntity else { continue }  // Don't animate summoning entities
+
+      // Apply spin rotation around world Y-axis (vertical)
+      // spinRotation * baseRotation applies spin in world space first
+      let spinRotation = simd_quatf(angle: spinAngle, axis: [0, 1, 0])
+      let baseRotation = baseOrientations[entity] ?? simd_quatf(angle: 0, axis: [0, 1, 0])
+      entity.transform.rotation = spinRotation * baseRotation
+
+      // Apply bobbing to the entity's local position
+      entity.position.y = bobOffset
+    }
 
     let collectionCheckInterval = isPerformanceMode ? 6 : 3
     let shouldCheckCollection = isSummoningActiveBinding || (frameCounter % collectionCheckInterval == 0)

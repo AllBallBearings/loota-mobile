@@ -42,7 +42,7 @@ enum CoinEntityFactory {
     }
 
     isLoadingCoinModel = true
-    coinModelCancellable = ModelEntity.loadModelAsync(named: "CoinPlain")
+    coinModelCancellable = ModelEntity.loadModelAsync(named: "AmazonGiftcard")
       .sink(
         receiveCompletion: { completionResult in
           switch completionResult {
@@ -158,9 +158,8 @@ enum CoinEntityFactory {
       coinModel.scale = SIMD3<Float>(repeating: 0.12)
       coinModel.name = "coin_model"
 
-      // Keep the USDZ model's authored orientation.
-
-      // Z-axis rotation (spinning) will be applied in ARViewContainer.
+      // No rotation applied here - the MarioCoin model is already upright
+      // Spinning animation will rotate around world Y-axis
 
       return coinModel
     }
