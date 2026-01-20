@@ -90,20 +90,14 @@ extension ARViewContainer.Coordinator {
       guard !collectedEntities.contains(entity) else { continue }
       guard entity != summoningEntity else { continue }  // Don't animate summoning entities
 
-      // Get the base orientation for this entity
-      let baseRotation = baseOrientations[entity] ?? simd_quatf(angle: 0, axis: [0, 1, 0])
-
-      // Apply spin rotation around Y axis (vertical axis for upright coin)
+      // Apply spin rotation around world Y-axis (vertical)
+      // spinRotation * baseRotation applies spin in world space first
       let spinRotation = simd_quatf(angle: spinAngle, axis: [0, 1, 0])
-      entity.transform.rotation = baseRotation * spinRotation
+      let baseRotation = baseOrientations[entity] ?? simd_quatf(angle: 0, axis: [0, 1, 0])
+      entity.transform.rotation = spinRotation * baseRotation
 
       // Apply bobbing to the entity's local position
-      // We need to modify Y position relative to the anchor
-      if let anchor = entity.parent as? AnchorEntity {
-        // Store original position if not stored
-        let originalY: Float = 0.0  // Coins are placed at anchor position
-        entity.position.y = originalY + bobOffset
-      }
+      entity.position.y = bobOffset
     }
 
     let collectionCheckInterval = isPerformanceMode ? 6 : 3
