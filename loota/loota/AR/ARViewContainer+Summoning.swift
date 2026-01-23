@@ -91,7 +91,7 @@ extension ARViewContainer.Coordinator {
     }
   }
 
-  func stopObjectSummoning() {
+  func stopObjectSummoning(keepCurrentPosition: Bool = false) {
     guard let entity = summoningEntity,
       let originalPosition = originalEntityPosition
     else {
@@ -103,11 +103,22 @@ extension ARViewContainer.Coordinator {
       return
     }
 
-    entity.setPosition(originalPosition, relativeTo: nil)
+    if keepCurrentPosition {
+      // Keep entity at current position for better UX when button released early
+      if isDebugMode {
+        print("🧙‍♂️ SUMMONING: Object summoning stopped, keeping entity at current position")
+      }
+    } else {
+      // Reset position and scale to original
+      entity.setPosition(originalPosition, relativeTo: nil)
 
-    // Reset scale to original
-    if let originalScale = originalEntityScale {
-      entity.scale = originalScale
+      if let originalScale = originalEntityScale {
+        entity.scale = originalScale
+      }
+
+      if isDebugMode {
+        print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position and scale")
+      }
     }
 
     summoningEntity = nil
@@ -115,10 +126,6 @@ extension ARViewContainer.Coordinator {
     originalEntityScale = nil
     originalSummonDistance = nil
     summonStartTime = nil
-
-    if isDebugMode {
-      print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position and scale")
-    }
   }
 
   private func animateObjectTowardsUser(_ entity: ModelEntity, cameraPosition: SIMD3<Float>) {
