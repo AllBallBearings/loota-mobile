@@ -50,6 +50,7 @@ extension ARViewContainer {
     public var collectedEntities: Set<ModelEntity> = []
     public var frameCounter: Int = 0
     public var lastFocusUpdateTime: Date = Date()
+    public var wasSummoningActive: Bool = false
 
     // Base anchor for world alignment
     public var baseAnchor: AnchorEntity?

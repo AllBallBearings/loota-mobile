@@ -9,6 +9,18 @@ extension ARViewContainer.Coordinator {
 
     frameCounter += 1
 
+    // Detect summoning button state changes
+    if isSummoningActiveBinding != wasSummoningActive {
+      if isSummoningActiveBinding {
+        // Button was just pressed - start summoning
+        startObjectSummoning()
+      } else {
+        // Button was just released - stop summoning
+        stopObjectSummoning()
+      }
+      wasSummoningActive = isSummoningActiveBinding
+    }
+
     fpsCounter += 1
     let elapsed = frameStartTime - fpsLastUpdate
     if elapsed >= 1.0 {
