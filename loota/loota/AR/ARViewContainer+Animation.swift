@@ -135,9 +135,33 @@ extension ARViewContainer.Coordinator {
           }
           autoCollectSummonedEntity(entity)
         } else {
-          // Move entity toward camera
+          // Move entity toward camera with easing
           let direction = simd_normalize(toCamera)
-          let moveAmount = summonSpeed * deltaTime
+
+          // MARK: - Easing Function for Dramatic Movement
+          // Calculate progress-based speed: slow start, accelerate as it gets closer
+          var easedSpeed = summonSpeed
+          if let originalDistance = originalSummonDistance {
+            // Calculate progress from 0 (at original position) to 1 (at collection threshold)
+            let distanceRemaining = max(distance - summonedCollectionDistance, 0)
+            let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
+            let progress = 1.0 - (distanceRemaining / totalTravelDistance)
+
+            // Ease-in cubic function: starts very slow, dramatically accelerates
+            // progress^3 gives us: 0.1 -> 0.001, 0.5 -> 0.125, 0.9 -> 0.729
+            let easedProgress = progress * progress * progress
+
+            // Speed ranges from minSpeed at start to maxSpeed at end
+            let minSpeed: Float = 0.3  // Slow, dramatic start
+            let maxSpeed: Float = 4.0  // Fast, dramatic finish
+            easedSpeed = minSpeed + (maxSpeed - minSpeed) * easedProgress
+
+            if isDebugMode && frameCounter % 60 == 0 {
+              print("🧙‍♂️ EASING: progress: \(String(format: "%.0f", progress * 100))%, easedSpeed: \(String(format: "%.2f", easedSpeed))m/s")
+            }
+          }
+
+          let moveAmount = easedSpeed * deltaTime
           let newPosition = entityPosition + direction * moveAmount
           entity.setPosition(newPosition, relativeTo: nil)
 
