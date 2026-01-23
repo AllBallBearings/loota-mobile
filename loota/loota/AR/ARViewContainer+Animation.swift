@@ -11,6 +11,10 @@ extension ARViewContainer.Coordinator {
 
     // Detect summoning button state changes
     if isSummoningActiveBinding != wasSummoningActive {
+      if isDebugMode {
+        print("🧙‍♂️ SUMMON_STATE: Button state changed: \(wasSummoningActive) → \(isSummoningActiveBinding)")
+        print("🧙‍♂️ SUMMON_STATE: focusedEntity: \(focusedEntity != nil ? "exists" : "nil"), summoningEntity: \(summoningEntity != nil ? "exists" : "nil")")
+      }
       if isSummoningActiveBinding {
         // Button was just pressed - start summoning
         startObjectSummoning()
@@ -114,82 +118,123 @@ extension ARViewContainer.Coordinator {
 
     // MARK: - Summoning Movement
     // Move summoning entity toward camera when button is held
+    // Debug: Log when button is held but no entity is being summoned
+    if isSummoningActiveBinding && summoningEntity == nil && isDebugMode && frameCounter % 120 == 0 {
+      print("🧙‍♂️ SUMMON_MOVE: ⚠️ Button held but summoningEntity is nil")
+      print("🧙‍♂️ SUMMON_MOVE: focusedEntity=\(focusedEntity != nil ? "exists" : "nil"), coinEntities.count=\(coinEntities.count)")
+    }
+
     if isSummoningActiveBinding, let entity = summoningEntity {
-      if let arView = arView,
-         let cameraTransform = arView.session.currentFrame?.camera.transform {
-        let cameraPosition = SIMD3<Float>(
-          cameraTransform.columns.3.x,
-          cameraTransform.columns.3.y,
-          cameraTransform.columns.3.z)
+      // Log when movement conditions are checked
+      if isDebugMode && frameCounter % 120 == 0 {
+        print("🧙‍♂️ SUMMON_MOVE: Movement loop active - checking arView and camera...")
+      }
 
-        let entityPosition = entity.position(relativeTo: nil)
-        let toCamera = cameraPosition - entityPosition
-        let distance = simd_length(toCamera)
+      guard let arView = arView else {
+        if isDebugMode && frameCounter % 60 == 0 {
+          print("🧙‍♂️ SUMMON_MOVE: ❌ arView is nil - cannot move entity!")
+        }
+        return
+      }
 
-        // Check if entity has reached collection threshold
-        let summonedCollectionDistance: Float = 0.8
-        if distance < summonedCollectionDistance {
-          // Entity reached user - trigger auto collection
-          if isDebugMode {
-            print("🧙‍♂️ SUMMONING: Entity reached user at \(distance)m - collecting!")
-          }
-          autoCollectSummonedEntity(entity)
-        } else {
-          // Move entity toward camera with easing
-          let direction = simd_normalize(toCamera)
+      guard let cameraTransform = arView.session.currentFrame?.camera.transform else {
+        if isDebugMode && frameCounter % 60 == 0 {
+          print("🧙‍♂️ SUMMON_MOVE: ❌ Camera transform unavailable - cannot track position!")
+        }
+        return
+      }
 
-          // MARK: - Easing Function for Dramatic Movement
-          // Calculate progress-based speed: slow start, accelerate as it gets closer
-          var easedSpeed = summonSpeed
-          if let originalDistance = originalSummonDistance {
-            // Calculate progress from 0 (at original position) to 1 (at collection threshold)
-            let distanceRemaining = max(distance - summonedCollectionDistance, 0)
-            let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
-            let progress = 1.0 - (distanceRemaining / totalTravelDistance)
+      let cameraPosition = SIMD3<Float>(
+        cameraTransform.columns.3.x,
+        cameraTransform.columns.3.y,
+        cameraTransform.columns.3.z)
 
-            // Ease-in cubic function: starts very slow, dramatically accelerates
-            // progress^3 gives us: 0.1 -> 0.001, 0.5 -> 0.125, 0.9 -> 0.729
-            let easedProgress = progress * progress * progress
+      let entityPosition = entity.position(relativeTo: nil)
+      let toCamera = cameraPosition - entityPosition
+      let distance = simd_length(toCamera)
 
-            // Speed ranges from minSpeed at start to maxSpeed at end
-            let minSpeed: Float = 0.3  // Slow, dramatic start
-            let maxSpeed: Float = 4.0  // Fast, dramatic finish
-            easedSpeed = minSpeed + (maxSpeed - minSpeed) * easedProgress
+      // Debug: Log detailed position info on first frame and periodically
+      if isDebugMode && frameCounter % 30 == 0 {
+        let pinId = entityToPinId[entity] ?? "unknown"
+        print("🧙‍♂️ SUMMON_MOVE: entity=\(pinId.prefix(8)), dist=\(String(format: "%.2f", distance))m")
+        print("🧙‍♂️ SUMMON_MOVE: entityPos=(\(String(format: "%.2f", entityPosition.x)), \(String(format: "%.2f", entityPosition.y)), \(String(format: "%.2f", entityPosition.z)))")
+        print("🧙‍♂️ SUMMON_MOVE: cameraPos=(\(String(format: "%.2f", cameraPosition.x)), \(String(format: "%.2f", cameraPosition.y)), \(String(format: "%.2f", cameraPosition.z)))")
+      }
 
-            if isDebugMode && frameCounter % 60 == 0 {
-              print("🧙‍♂️ EASING: progress: \(String(format: "%.0f", progress * 100))%, easedSpeed: \(String(format: "%.2f", easedSpeed))m/s")
-            }
-          }
+      // Check if entity has reached collection threshold
+      let summonedCollectionDistance: Float = 0.8
+      if distance < summonedCollectionDistance {
+        // Entity reached user - trigger auto collection
+        if isDebugMode {
+          print("🧙‍♂️ SUMMON_MOVE: ✅ Entity reached collection threshold at \(String(format: "%.2f", distance))m (threshold: \(summonedCollectionDistance)m)")
+          print("🧙‍♂️ SUMMON_MOVE: Triggering autoCollectSummonedEntity...")
+        }
+        autoCollectSummonedEntity(entity)
+      } else {
+        // Move entity toward camera with easing
+        let direction = simd_normalize(toCamera)
 
-          let moveAmount = easedSpeed * deltaTime
-          let newPosition = entityPosition + direction * moveAmount
-          entity.setPosition(newPosition, relativeTo: nil)
+        // MARK: - Easing Function for Dramatic Movement
+        // Calculate progress-based speed: slow start, accelerate as it gets closer
+        var easedSpeed = summonSpeed
+        if let originalDistance = originalSummonDistance {
+          // Calculate progress from 0 (at original position) to 1 (at collection threshold)
+          let distanceRemaining = max(distance - summonedCollectionDistance, 0)
+          let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
+          let progress = 1.0 - (distanceRemaining / totalTravelDistance)
 
-          // MARK: - Scaling Effect
-          // Scale up entity as it approaches to create fill-screen effect
-          // Scale increases from 1.0 at original distance to 3.0 at collection distance
-          if let originalScale = originalEntityScale,
-             let originalDistance = originalSummonDistance {
-            // Calculate progress from 0 (at original position) to 1 (at collection threshold)
-            let distanceRemaining = max(distance - summonedCollectionDistance, 0)
-            let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
-            let progress = 1.0 - (distanceRemaining / totalTravelDistance)
+          // Ease-in cubic function: starts very slow, dramatically accelerates
+          // progress^3 gives us: 0.1 -> 0.001, 0.5 -> 0.125, 0.9 -> 0.729
+          let easedProgress = progress * progress * progress
 
-            // Scale from 1.0 to 3.0 as progress goes from 0 to 1
-            let minScale: Float = 1.0
-            let maxScale: Float = 3.0
-            let scaleFactor = minScale + (maxScale - minScale) * progress
-
-            // Apply uniform scale
-            entity.scale = originalScale * scaleFactor
-
-            if isDebugMode && frameCounter % 60 == 0 {
-              print("🧙‍♂️ SUMMONING: Scale progress: \(String(format: "%.0f", progress * 100))%, scale: \(String(format: "%.2f", scaleFactor))x")
-            }
-          }
+          // Speed ranges from minSpeed at start to maxSpeed at end
+          let minSpeed: Float = 0.3  // Slow, dramatic start
+          let maxSpeed: Float = 4.0  // Fast, dramatic finish
+          easedSpeed = minSpeed + (maxSpeed - minSpeed) * easedProgress
 
           if isDebugMode && frameCounter % 60 == 0 {
-            print("🧙‍♂️ SUMMONING: Moving - dist: \(String(format: "%.2f", distance))m, speed: \(summonSpeed)m/s")
+            print("🧙‍♂️ SUMMON_EASING: progress=\(String(format: "%.0f", progress * 100))%, easedProgress=\(String(format: "%.3f", easedProgress)), speed=\(String(format: "%.2f", easedSpeed))m/s")
+          }
+        } else {
+          if isDebugMode && frameCounter % 60 == 0 {
+            print("🧙‍♂️ SUMMON_MOVE: ⚠️ originalSummonDistance is nil, using default speed: \(summonSpeed)m/s")
+          }
+        }
+
+        let moveAmount = easedSpeed * deltaTime
+        let newPosition = entityPosition + direction * moveAmount
+        entity.setPosition(newPosition, relativeTo: nil)
+
+        // Debug: Log movement details
+        if isDebugMode && frameCounter % 60 == 0 {
+          print("🧙‍♂️ SUMMON_MOVE: moveAmount=\(String(format: "%.4f", moveAmount))m, deltaTime=\(String(format: "%.4f", deltaTime))s")
+          print("🧙‍♂️ SUMMON_MOVE: newPos=(\(String(format: "%.2f", newPosition.x)), \(String(format: "%.2f", newPosition.y)), \(String(format: "%.2f", newPosition.z)))")
+        }
+
+        // MARK: - Scaling Effect
+        // Scale up entity as it approaches to create fill-screen effect
+        // Scale increases from 1.0 at original distance to 3.0 at collection distance
+        if let originalScale = originalEntityScale,
+           let originalDistance = originalSummonDistance {
+          // Calculate progress from 0 (at original position) to 1 (at collection threshold)
+          let distanceRemaining = max(distance - summonedCollectionDistance, 0)
+          let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
+          let progress = 1.0 - (distanceRemaining / totalTravelDistance)
+
+          // Scale from 1.0 to 3.0 as progress goes from 0 to 1
+          let minScale: Float = 1.0
+          let maxScale: Float = 3.0
+          let scaleFactor = minScale + (maxScale - minScale) * progress
+
+          // Apply uniform scale
+          entity.scale = originalScale * scaleFactor
+
+          if isDebugMode && frameCounter % 60 == 0 {
+            print("🧙‍♂️ SUMMON_SCALE: progress=\(String(format: "%.0f", progress * 100))%, scale=\(String(format: "%.2f", scaleFactor))x")
+          }
+        } else {
+          if isDebugMode && frameCounter % 120 == 0 {
+            print("🧙‍♂️ SUMMON_SCALE: ⚠️ Missing originalScale or originalDistance - skipping scale effect")
           }
         }
       }
