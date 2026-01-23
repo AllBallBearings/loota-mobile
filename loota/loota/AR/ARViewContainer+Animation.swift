@@ -3,13 +3,32 @@ import Foundation
 import QuartzCore
 import RealityKit
 
+// MARK: - ARViewContainer Animation Extension
+/// This extension handles the main animation loop for the AR experience, including:
+/// - Coin bobbing and spinning animations
+/// - Object summoning movement and collection
+/// - Focus detection and nearest loot tracking
+/// - FPS monitoring and performance optimization
+///
+/// The animation loop runs via CADisplayLink for smooth 60fps updates.
+/// Different subsystems run at different intervals for performance optimization.
+
 extension ARViewContainer.Coordinator {
+  /// Main animation loop called every frame by CADisplayLink.
+  /// Handles all real-time AR object updates including movement, rotation, and collection detection.
   @objc func updateRotation(displayLink: CADisplayLink) {
     let frameStartTime = CACurrentMediaTime()
 
     frameCounter += 1
 
-    // Detect summoning button state changes
+    // MARK: - Summoning Button State Detection
+    // The summoning system uses a button-hold gesture pattern:
+    // - When button is pressed: startObjectSummoning() captures the focused entity and begins summoning
+    // - When button is released: stopObjectSummoning() resets or preserves entity position
+    // - While held: The summoning movement logic (below) continuously moves the entity toward the camera
+    //
+    // State tracking uses wasSummoningActive to detect state transitions and prevent
+    // repeated start/stop calls on the same button press.
     if isSummoningActiveBinding != wasSummoningActive {
       if isDebugMode {
         print("🧙‍♂️ SUMMON_STATE: Button state changed: \(wasSummoningActive) → \(isSummoningActiveBinding)")
@@ -102,9 +121,12 @@ extension ARViewContainer.Coordinator {
     // When bobPhase goes from 0 to 2π, spin goes from 0 to π (half rotation)
     let spinAngle = (animationTime / bobCycleDuration) * .pi
 
+    // Apply bobbing/spinning animation to all visible coins EXCEPT:
+    // - Collected entities (already removed from scene)
+    // - Summoning entity (controlled by summoning movement logic instead)
     for entity in coinEntities {
       guard !collectedEntities.contains(entity) else { continue }
-      guard entity != summoningEntity else { continue }  // Don't animate summoning entities
+      guard entity != summoningEntity else { continue }  // Summoning movement takes over
 
       // Apply spin rotation around world Y-axis (vertical)
       // spinRotation * baseRotation applies spin in world space first
@@ -117,7 +139,32 @@ extension ARViewContainer.Coordinator {
     }
 
     // MARK: - Summoning Movement
-    // Move summoning entity toward camera when button is held
+    // ==========================================================================================
+    // SUMMONING MOVEMENT SYSTEM
+    // ==========================================================================================
+    //
+    // Overview:
+    // When the summon button is held, the focused AR object moves toward the camera with
+    // a dramatic "magical pull" effect. The movement uses easing for visual drama and
+    // scales up the object as it approaches for a "fill-the-screen" climax.
+    //
+    // Movement Flow:
+    // 1. Button pressed → startObjectSummoning() sets summoningEntity and stores original position
+    // 2. Each frame while held → This code calculates direction to camera and moves entity
+    // 3. Entity reaches collection threshold (0.8m) → autoCollectSummonedEntity() triggers
+    // 4. Button released before collection → stopObjectSummoning() returns entity to original position
+    //
+    // Key Variables:
+    // - summoningEntity: The AR object currently being summoned (nil if none)
+    // - originalEntityPosition: Where the entity started (for reset on cancel)
+    // - originalSummonDistance: Initial distance to camera (for progress calculation)
+    // - originalEntityScale: Starting scale (for scaling effect calculation)
+    //
+    // Performance Note:
+    // Summoning movement runs every frame when active for smooth animation.
+    // Other subsystems use frame-skipping intervals for performance optimization.
+    // ==========================================================================================
+    //
     // Debug: Log when button is held but no entity is being summoned
     if isSummoningActiveBinding && summoningEntity == nil && isDebugMode && frameCounter % 120 == 0 {
       print("🧙‍♂️ SUMMON_MOVE: ⚠️ Button held but summoningEntity is nil")
@@ -161,10 +208,14 @@ extension ARViewContainer.Coordinator {
         print("🧙‍♂️ SUMMON_MOVE: cameraPos=(\(String(format: "%.2f", cameraPosition.x)), \(String(format: "%.2f", cameraPosition.y)), \(String(format: "%.2f", cameraPosition.z)))")
       }
 
-      // Check if entity has reached collection threshold
+      // MARK: - Collection Threshold Check
+      // Check if entity has reached collection threshold.
+      // Summoned objects use a larger threshold (0.8m vs 0.25m for normal collection)
+      // because they're actively moving toward the camera and need a bigger "catch zone".
       let summonedCollectionDistance: Float = 0.8
       if distance < summonedCollectionDistance {
-        // Entity reached user - trigger auto collection
+        // Entity reached user - trigger auto collection via autoCollectSummonedEntity()
+        // This handles cleanup, sound effects, haptics, and the collection callback.
         if isDebugMode {
           print("🧙‍♂️ SUMMON_MOVE: ✅ Entity reached collection threshold at \(String(format: "%.2f", distance))m (threshold: \(summonedCollectionDistance)m)")
           print("🧙‍♂️ SUMMON_MOVE: Triggering autoCollectSummonedEntity...")
@@ -175,6 +226,28 @@ extension ARViewContainer.Coordinator {
         let direction = simd_normalize(toCamera)
 
         // MARK: - Easing Function for Dramatic Movement
+        // ==========================================================================================
+        // CUBIC EASE-IN SPEED CURVE
+        // ==========================================================================================
+        //
+        // Purpose:
+        // Creates a "magical pull" effect where the object starts moving slowly and dramatically
+        // accelerates as it gets closer, creating tension and anticipation before collection.
+        //
+        // How it works:
+        // 1. Calculate progress as a ratio from 0 (at start) to 1 (at collection threshold)
+        // 2. Apply cubic easing: easedProgress = progress^3
+        //    - At 10% distance traveled: speed is only 0.1% of max (very slow)
+        //    - At 50% distance traveled: speed is 12.5% of max (building momentum)
+        //    - At 90% distance traveled: speed is 72.9% of max (dramatic acceleration)
+        // 3. Interpolate between minSpeed (0.3 m/s) and maxSpeed (4.0 m/s)
+        //
+        // Why cubic ease-in:
+        // - Linear movement feels mechanical and boring
+        // - Ease-out would slow down at the end (anticlimactic)
+        // - Ease-in builds to a satisfying "snap" at collection
+        // ==========================================================================================
+        //
         // Calculate progress-based speed: slow start, accelerate as it gets closer
         var easedSpeed = summonSpeed
         if let originalDistance = originalSummonDistance {
@@ -212,6 +285,25 @@ extension ARViewContainer.Coordinator {
         }
 
         // MARK: - Scaling Effect
+        // ==========================================================================================
+        // PROGRESSIVE SCALING FOR VISUAL IMPACT
+        // ==========================================================================================
+        //
+        // Purpose:
+        // As the summoned object moves toward the camera, it scales up proportionally.
+        // This creates a dramatic "object rushing toward you" effect that fills more
+        // of the screen as collection approaches.
+        //
+        // How it works:
+        // - Uses the same progress calculation as the easing function
+        // - Linear interpolation from 1.0x scale (at start) to 3.0x scale (at collection)
+        // - Applied uniformly to maintain object proportions
+        //
+        // Visual effect:
+        // Combined with the accelerating movement, the scaling creates an immersive
+        // "magical summoning" experience where the treasure seems to fly into your hands.
+        // ==========================================================================================
+        //
         // Scale up entity as it approaches to create fill-screen effect
         // Scale increases from 1.0 at original distance to 3.0 at collection distance
         if let originalScale = originalEntityScale,
@@ -277,6 +369,10 @@ extension ARViewContainer.Coordinator {
 
       let distance = simd_distance(cameraPosition, entityWorldPosition)
 
+      // MARK: - Dual Threshold Collection System
+      // Normal collection: User walks up to an object (tight 0.25m threshold for precision)
+      // Summoned collection: Object is actively flying toward camera (larger 0.8m threshold)
+      // This prevents accidental collection while walking but ensures summoned objects are caught.
       let normalCollectionDistance: Float = 0.25
       let summonedCollectionDistance: Float = 0.8
       let isSummonedObject = (entity == summoningEntity)
