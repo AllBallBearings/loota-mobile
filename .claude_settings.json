@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Write(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Edit(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Glob(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Grep(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Read(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/.auto-claude/specs/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Write(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/.auto-claude/specs/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Edit(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/worktrees/tasks/002-the-summon-feature-is-not-working-when-the-user-cl/.auto-claude/specs/002-the-summon-feature-is-not-working-when-the-user-cl/**)",
+      "Read(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/**)",
+      "Write(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/**)",
+      "Edit(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/**)",
+      "Glob(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/**)",
+      "Grep(/Users/jaredgoolsby/Documents/Github/loota-mobile/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}

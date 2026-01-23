@@ -133,6 +133,7 @@ public struct ContentView: View {
           }
         }
         .onAppear {
+          print("[Auto Claude] Main content view loaded successfully")
           // Show splash for 2 seconds, then start initialization
           DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             withAnimation(.easeInOut(duration: 0.5)) {

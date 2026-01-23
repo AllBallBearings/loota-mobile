@@ -1,2 +1,5 @@
 *.xcuserstate
 memory-bank/
+
+# Auto Claude data directory
+.auto-claude/
