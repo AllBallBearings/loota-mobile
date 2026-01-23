@@ -46,6 +46,16 @@ extension ARViewContainer.Coordinator {
       print("🧙‍♂️ SUMMONING: ✅ Found center target entity at distance: \(distance) meters")
     }
 
+    // Edge case: If entity is already within collection range, collect immediately
+    let summonedCollectionDistance: Float = 0.8
+    if distance <= summonedCollectionDistance {
+      if isDebugMode {
+        print("🧙‍♂️ SUMMONING: Entity already within collection range (\(distance)m <= \(summonedCollectionDistance)m) - collecting immediately!")
+      }
+      autoCollectSummonedEntity(targetEntity)
+      return
+    }
+
     summoningEntity = targetEntity
     originalEntityPosition = targetEntity.position(relativeTo: nil)
     originalEntityScale = targetEntity.scale
