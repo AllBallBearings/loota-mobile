@@ -44,6 +44,8 @@ extension ARViewContainer {
     public var focusRange: Float = 5.0
     public var summoningEntity: ModelEntity?
     public var originalEntityPosition: SIMD3<Float>?
+    public var originalEntityScale: SIMD3<Float>?
+    public var originalSummonDistance: Float?
     public var summonStartTime: CFTimeInterval?
     public let summonSpeed: Float = 0.8
     public let proximityThreshold: Float = 30.48

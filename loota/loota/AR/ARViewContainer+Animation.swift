@@ -141,6 +141,29 @@ extension ARViewContainer.Coordinator {
           let newPosition = entityPosition + direction * moveAmount
           entity.setPosition(newPosition, relativeTo: nil)
 
+          // MARK: - Scaling Effect
+          // Scale up entity as it approaches to create fill-screen effect
+          // Scale increases from 1.0 at original distance to 3.0 at collection distance
+          if let originalScale = originalEntityScale,
+             let originalDistance = originalSummonDistance {
+            // Calculate progress from 0 (at original position) to 1 (at collection threshold)
+            let distanceRemaining = max(distance - summonedCollectionDistance, 0)
+            let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
+            let progress = 1.0 - (distanceRemaining / totalTravelDistance)
+
+            // Scale from 1.0 to 3.0 as progress goes from 0 to 1
+            let minScale: Float = 1.0
+            let maxScale: Float = 3.0
+            let scaleFactor = minScale + (maxScale - minScale) * progress
+
+            // Apply uniform scale
+            entity.scale = originalScale * scaleFactor
+
+            if isDebugMode && frameCounter % 60 == 0 {
+              print("🧙‍♂️ SUMMONING: Scale progress: \(String(format: "%.0f", progress * 100))%, scale: \(String(format: "%.2f", scaleFactor))x")
+            }
+          }
+
           if isDebugMode && frameCounter % 60 == 0 {
             print("🧙‍♂️ SUMMONING: Moving - dist: \(String(format: "%.2f", distance))m, speed: \(summonSpeed)m/s")
           }

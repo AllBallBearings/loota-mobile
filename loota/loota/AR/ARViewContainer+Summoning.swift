@@ -48,6 +48,8 @@ extension ARViewContainer.Coordinator {
 
     summoningEntity = targetEntity
     originalEntityPosition = targetEntity.position(relativeTo: nil)
+    originalEntityScale = targetEntity.scale
+    originalSummonDistance = distance
     summonStartTime = CACurrentMediaTime()
 
     if let entityIndex = coinEntities.firstIndex(of: targetEntity) {
@@ -95,18 +97,27 @@ extension ARViewContainer.Coordinator {
     else {
       summoningEntity = nil
       originalEntityPosition = nil
+      originalEntityScale = nil
+      originalSummonDistance = nil
       summonStartTime = nil
       return
     }
 
     entity.setPosition(originalPosition, relativeTo: nil)
 
+    // Reset scale to original
+    if let originalScale = originalEntityScale {
+      entity.scale = originalScale
+    }
+
     summoningEntity = nil
     originalEntityPosition = nil
+    originalEntityScale = nil
+    originalSummonDistance = nil
     summonStartTime = nil
 
     if isDebugMode {
-      print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position")
+      print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position and scale")
     }
   }
 
@@ -161,6 +172,8 @@ extension ARViewContainer.Coordinator {
     }
     summoningEntity = nil
     originalEntityPosition = nil
+    originalEntityScale = nil
+    originalSummonDistance = nil
     summonStartTime = nil
 
     collectedEntities.insert(entity)
