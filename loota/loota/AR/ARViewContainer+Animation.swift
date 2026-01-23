@@ -112,6 +112,42 @@ extension ARViewContainer.Coordinator {
       entity.position.y = bobOffset
     }
 
+    // MARK: - Summoning Movement
+    // Move summoning entity toward camera when button is held
+    if isSummoningActiveBinding, let entity = summoningEntity {
+      if let arView = arView,
+         let cameraTransform = arView.session.currentFrame?.camera.transform {
+        let cameraPosition = SIMD3<Float>(
+          cameraTransform.columns.3.x,
+          cameraTransform.columns.3.y,
+          cameraTransform.columns.3.z)
+
+        let entityPosition = entity.position(relativeTo: nil)
+        let toCamera = cameraPosition - entityPosition
+        let distance = simd_length(toCamera)
+
+        // Check if entity has reached collection threshold
+        let summonedCollectionDistance: Float = 0.8
+        if distance < summonedCollectionDistance {
+          // Entity reached user - trigger auto collection
+          if isDebugMode {
+            print("🧙‍♂️ SUMMONING: Entity reached user at \(distance)m - collecting!")
+          }
+          autoCollectSummonedEntity(entity)
+        } else {
+          // Move entity toward camera
+          let direction = simd_normalize(toCamera)
+          let moveAmount = summonSpeed * deltaTime
+          let newPosition = entityPosition + direction * moveAmount
+          entity.setPosition(newPosition, relativeTo: nil)
+
+          if isDebugMode && frameCounter % 60 == 0 {
+            print("🧙‍♂️ SUMMONING: Moving - dist: \(String(format: "%.2f", distance))m, speed: \(summonSpeed)m/s")
+          }
+        }
+      }
+    }
+
     let collectionCheckInterval = isPerformanceMode ? 6 : 3
     let shouldCheckCollection = isSummoningActiveBinding || (frameCounter % collectionCheckInterval == 0)
     if !shouldCheckCollection {
