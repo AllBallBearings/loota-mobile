@@ -2,112 +2,163 @@ import SwiftUI
 
 struct SplashScreen: View {
     @State private var isAnimating = false
-    @State private var textOpacity = 0.0
-    @State private var rotation = 0.0
-    
+    @State private var logoOpacity = 0.0
+    @State private var logoScale = 0.85
+    @State private var subtitleOpacity = 0.0
+    @State private var ringRotation = 0.0
+    @State private var shimmerOffset: CGFloat = -200
+
     var body: some View {
         ZStack {
-            // Background gradient
+            // Rich dark background
             LootaTheme.backgroundGradient
-            .ignoresSafeArea()
+                .ignoresSafeArea()
+
+            // Subtle radial warmth
             RadialGradient(
-                gradient: Gradient(colors: [Color.white.opacity(0.15), Color.clear]),
+                gradient: Gradient(colors: [
+                    LootaTheme.accentGlow.opacity(0.08),
+                    Color.clear
+                ]),
                 center: .center,
-                startRadius: 40,
-                endRadius: 320
+                startRadius: 60,
+                endRadius: 400
             )
-            .blendMode(.screen)
-            
-            // Main content
-            VStack(spacing: 20) {
+            .ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                // Logo container
                 ZStack {
+                    // Outer decorative ring
                     Circle()
                         .strokeBorder(
-                            AngularGradient(
-                                gradient: Gradient(colors: [
-                                    LootaTheme.neonCyan.opacity(0.8),
-                                    LootaTheme.cosmicPurple.opacity(0.8),
-                                    LootaTheme.highlight.opacity(0.8),
-                                    LootaTheme.neonCyan.opacity(0.8)
-                                ]),
-                                center: .center
+                            LinearGradient(
+                                colors: [
+                                    LootaTheme.accentGlow.opacity(0.4),
+                                    LootaTheme.accentGlow.opacity(0.1),
+                                    LootaTheme.accentGlow.opacity(0.4)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             ),
-                            lineWidth: 6
+                            lineWidth: 2
                         )
-                        .frame(width: 180, height: 180)
-                        .rotationEffect(.degrees(rotation))
-                        .animation(.linear(duration: 8).repeatForever(autoreverses: false), value: rotation)
-                        .blur(radius: 0.4)
-                        .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 16, x: 0, y: 0)
-                    
+                        .frame(width: 160, height: 160)
+                        .rotationEffect(.degrees(ringRotation))
+
+                    // Inner glow circle
                     Circle()
                         .fill(
                             RadialGradient(
                                 colors: [
-                                    LootaTheme.cosmicPurple.opacity(0.4),
+                                    LootaTheme.accentGlow.opacity(0.15),
                                     Color.clear
                                 ],
                                 center: .center,
-                                startRadius: 10,
-                                endRadius: 120
+                                startRadius: 20,
+                                endRadius: 70
                             )
                         )
-                        .frame(width: 140, height: 140)
+                        .frame(width: 120, height: 120)
                         .scaleEffect(isAnimating ? 1.05 : 0.95)
-                        .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: isAnimating)
-                    
-                    // Loota text with glow effect
+
+                    // Main logo text
                     Text("Loota")
-                        .font(.system(size: 64, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .shadow(color: LootaTheme.cosmicPurple.opacity(0.9), radius: 24, x: 0, y: 0)
-                        .shadow(color: .white.opacity(0.35), radius: 16, x: 0, y: 0)
-                        .scaleEffect(isAnimating ? 1.06 : 1.0)
-                        .opacity(textOpacity)
-                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
-                }
-                
-                // Subtitle
-                Text("AR Treasure Hunt")
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
-                    .foregroundColor(LootaTheme.textSecondary)
-                    .opacity(textOpacity)
-                
-                Text("Find. Collect. Celebrate.")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(LootaTheme.neonCyan.opacity(0.9))
-                    .opacity(textOpacity)
-                
-                Capsule()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 140, height: 5)
-                    .overlay(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    LootaTheme.textPrimary,
+                                    LootaTheme.highlight
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
-                            .frame(width: isAnimating ? 110 : 60, height: 5)
-                            .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: isAnimating)
-                    )
+                        )
+                        .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 20, x: 0, y: 0)
+                        .overlay(
+                            // Shimmer effect
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.clear,
+                                            Color.white.opacity(0.3),
+                                            Color.clear
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 60)
+                                .offset(x: shimmerOffset)
+                                .mask(
+                                    Text("Loota")
+                                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                                )
+                        )
+                        .scaleEffect(logoScale)
+                        .opacity(logoOpacity)
+                }
+
+                // Subtitle section
+                VStack(spacing: 10) {
+                    Text("Treasure Hunt")
+                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .foregroundColor(LootaTheme.textSecondary)
+                        .tracking(2)
+
+                    Text("Discover  ·  Collect  ·  Win")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundColor(LootaTheme.textMuted)
+                        .tracking(1)
+                }
+                .opacity(subtitleOpacity)
+
+                // Loading indicator
+                ZStack {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 120, height: 4)
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [LootaTheme.accentGlow, LootaTheme.highlight],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: isAnimating ? 90 : 40, height: 4)
+                        .frame(maxWidth: 120, alignment: .leading)
+                }
+                .padding(.top, 8)
+                .opacity(subtitleOpacity)
             }
         }
         .onAppear {
-            // Animate text appearance
-            withAnimation(.easeIn(duration: 1.0)) {
-                textOpacity = 1.0
+            // Staggered animations for premium feel
+            withAnimation(.easeOut(duration: 0.8)) {
+                logoOpacity = 1.0
+                logoScale = 1.0
             }
-            
-            // Start pulsing animation
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+
+            withAnimation(.easeOut(duration: 0.8).delay(0.3)) {
+                subtitleOpacity = 1.0
+            }
+
+            // Continuous subtle animations
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 isAnimating = true
             }
-            
-            withAnimation(.easeIn(duration: 0.5)) {
-                rotation = 360
+
+            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
+                ringRotation = 360
+            }
+
+            // Shimmer animation
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false).delay(0.5)) {
+                shimmerOffset = 200
             }
         }
     }
