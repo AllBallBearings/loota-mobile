@@ -88,6 +88,7 @@ public struct HuntData: Codable {
   public let name: String?
   public let description: String?
   public let type: HuntType
+  public let objectType: ARObjectType?  // Default loot type for the hunt (coin, giftCard, dollarSign)
   public let winnerId: String?
   public let createdAt: String?
   public let updatedAt: String?
@@ -107,6 +108,7 @@ public struct HuntData: Codable {
     name: String?,
     description: String?,
     type: HuntType,
+    objectType: ARObjectType?,
     winnerId: String?,
     createdAt: String?,
     updatedAt: String?,
@@ -124,6 +126,7 @@ public struct HuntData: Codable {
     self.name = name
     self.description = description
     self.type = type
+    self.objectType = objectType
     self.winnerId = winnerId
     self.createdAt = createdAt
     self.updatedAt = updatedAt
@@ -145,6 +148,7 @@ public struct HuntData: Codable {
     name = try container.decodeIfPresent(String.self, forKey: .name)
     description = try container.decodeIfPresent(String.self, forKey: .description)
     type = try container.decode(HuntType.self, forKey: .type)
+    objectType = try container.decodeIfPresent(ARObjectType.self, forKey: .objectType)
     winnerId = try container.decodeIfPresent(String.self, forKey: .winnerId)
     createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
@@ -163,7 +167,7 @@ public struct HuntData: Codable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case id, name, description, type, winnerId, createdAt, updatedAt, creatorId
+    case id, name, description, type, objectType, winnerId, createdAt, updatedAt, creatorId
     case pins, isCompleted, completedAt, participants, creator, winner
     case winnerContact, creatorContact
   }

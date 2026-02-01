@@ -26,6 +26,7 @@ extension ARViewContainer {
     @Binding public var showHorizonLineBinding: Bool
     @Binding public var isPerformanceMode: Bool
     @Binding public var isLoadingModels: Bool
+    @Binding public var debugObjectTypeOverride: ARObjectType?
 
     public var onCoinCollected: ((String) -> Void)?
     public var coinEntities: [ModelEntity] = []
@@ -118,7 +119,8 @@ extension ARViewContainer {
       isDebugMode: Binding<Bool>,
       showHorizonLine: Binding<Bool>,
       isPerformanceMode: Binding<Bool>,
-      isLoadingModels: Binding<Bool>
+      isLoadingModels: Binding<Bool>,
+      debugObjectTypeOverride: Binding<ARObjectType?>
     ) {
       print("Coordinator init: Setting up.")
       self.referenceLocation = initialReferenceLocation
@@ -137,6 +139,7 @@ extension ARViewContainer {
       self._showHorizonLineBinding = showHorizonLine
       self._isPerformanceMode = isPerformanceMode
       self._isLoadingModels = isLoadingModels
+      self._debugObjectTypeOverride = debugObjectTypeOverride
 
       super.init()
 

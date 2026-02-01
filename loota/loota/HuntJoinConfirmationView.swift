@@ -457,6 +457,7 @@ struct HuntJoinConfirmationView: View {
       description:
         "Explore the heart of the city and discover hidden treasures around iconic landmarks!",
       type: .geolocation,
+      objectType: .coin,
       winnerId: nil,
       createdAt: nil,
       updatedAt: nil,

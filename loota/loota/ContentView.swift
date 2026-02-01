@@ -24,6 +24,7 @@ public struct ContentView: View {
   @State private var showHorizonLine: Bool = false
   @State private var isPerformanceMode: Bool = false
   @State private var showGiftCardTest: Bool = false
+  @State private var debugObjectTypeOverride: ARObjectType? = nil
 
   @StateObject private var locationManager = LocationManager()
   @StateObject private var huntDataManager = HuntDataManager.shared
@@ -199,7 +200,8 @@ public struct ContentView: View {
           isDebugMode: $isDebugMode,
           showHorizonLine: $showHorizonLine,
           isPerformanceMode: $isPerformanceMode,
-          isLoadingModels: $isLoadingModels
+          isLoadingModels: $isLoadingModels,
+          debugObjectTypeOverride: $debugObjectTypeOverride
         )
         // Use a stable ID that doesn't change during active gameplay
         .id("ar-view-\(currentHuntType?.rawValue ?? "none")")
@@ -729,6 +731,52 @@ public struct ContentView: View {
               )
             }
 
+            // Object Type Override Picker
+            VStack(alignment: .leading, spacing: 8) {
+              HStack(spacing: 12) {
+                Image(systemName: "cube.fill")
+                  .foregroundColor(debugObjectTypeOverride != nil ? LootaTheme.warning : LootaTheme.neonCyan)
+                  .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("Object Type Override")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(LootaTheme.textPrimary)
+                  Text(debugObjectTypeOverride?.displayName ?? "Use Default")
+                    .font(.caption)
+                    .foregroundColor(debugObjectTypeOverride != nil ? LootaTheme.warning : LootaTheme.textSecondary)
+                }
+                Spacer()
+              }
+
+              HStack(spacing: 8) {
+                ForEach([nil, ARObjectType.coin, ARObjectType.giftCard], id: \.self) { type in
+                  Button(action: {
+                    debugObjectTypeOverride = type
+                  }) {
+                    Text(type?.displayName ?? "Default")
+                      .font(.caption.weight(.semibold))
+                      .foregroundColor(debugObjectTypeOverride == type ? .white : LootaTheme.textSecondary)
+                      .padding(.horizontal, 12)
+                      .padding(.vertical, 6)
+                      .background(
+                        Capsule()
+                          .fill(debugObjectTypeOverride == type ? LootaTheme.cosmicPurple : Color.white.opacity(0.08))
+                      )
+                  }
+                }
+              }
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(
+              RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                  RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+            )
+
             Button(action: {
               showGiftCardTest = true
             }) {
@@ -1073,11 +1121,13 @@ public struct ContentView: View {
       }
       
       self.proximityMarkers = []
-      if !self.objectLocations.isEmpty && self.selectedObject == .none {
-        self.selectedObject = .coin
+      // Use hunt's objectType if specified, otherwise default to coin
+      let huntObjectType = huntData.objectType ?? .coin
+      if !self.objectLocations.isEmpty {
+        self.selectedObject = huntObjectType
       }
       let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
-      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), AR objects created: \(self.objectLocations.count)")
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), AR objects created: \(self.objectLocations.count), objectType: \(huntObjectType.rawValue)")
 
     case .proximity:
       print("ContentView loadHuntData: Processing \(huntData.pins.count) pins for proximity")
@@ -1105,9 +1155,10 @@ public struct ContentView: View {
       }
       
       self.objectLocations = []
-      self.selectedObject = .coin  // Default to coin for proximity
+      // Use hunt's objectType if specified, otherwise default to coin
+      self.selectedObject = huntData.objectType ?? .coin
       let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
-      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count)")
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count), objectType: \(self.selectedObject.rawValue)")
     }
   }
 

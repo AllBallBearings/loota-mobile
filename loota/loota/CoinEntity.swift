@@ -42,7 +42,7 @@ enum CoinEntityFactory {
     }
 
     isLoadingCoinModel = true
-    coinModelCancellable = ModelEntity.loadModelAsync(named: "AmazonGiftcard")
+    coinModelCancellable = ModelEntity.loadModelAsync(named: "CoinPlain")
       .sink(
         receiveCompletion: { completionResult in
           switch completionResult {

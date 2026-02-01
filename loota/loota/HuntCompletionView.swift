@@ -596,6 +596,7 @@ private struct ContactActionButton: View {
         name: "Sample Hunt",
         description: "A sample treasure hunt for preview",
         type: .geolocation,
+        objectType: .coin,
         winnerId: "user123",
         createdAt: nil,
         updatedAt: nil,
