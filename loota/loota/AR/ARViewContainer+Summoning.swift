@@ -46,8 +46,20 @@ extension ARViewContainer.Coordinator {
       print("🧙‍♂️ SUMMONING: ✅ Found center target entity at distance: \(distance) meters")
     }
 
+    // Edge case: If entity is already within collection range, collect immediately
+    let summonedCollectionDistance: Float = 0.8
+    if distance <= summonedCollectionDistance {
+      if isDebugMode {
+        print("🧙‍♂️ SUMMONING: Entity already within collection range (\(distance)m <= \(summonedCollectionDistance)m) - collecting immediately!")
+      }
+      autoCollectSummonedEntity(targetEntity)
+      return
+    }
+
     summoningEntity = targetEntity
     originalEntityPosition = targetEntity.position(relativeTo: nil)
+    originalEntityScale = targetEntity.scale
+    originalSummonDistance = distance
     summonStartTime = CACurrentMediaTime()
 
     if let entityIndex = coinEntities.firstIndex(of: targetEntity) {
@@ -89,25 +101,41 @@ extension ARViewContainer.Coordinator {
     }
   }
 
-  func stopObjectSummoning() {
+  func stopObjectSummoning(keepCurrentPosition: Bool = false) {
     guard let entity = summoningEntity,
       let originalPosition = originalEntityPosition
     else {
       summoningEntity = nil
       originalEntityPosition = nil
+      originalEntityScale = nil
+      originalSummonDistance = nil
       summonStartTime = nil
       return
     }
 
-    entity.setPosition(originalPosition, relativeTo: nil)
+    if keepCurrentPosition {
+      // Keep entity at current position for better UX when button released early
+      if isDebugMode {
+        print("🧙‍♂️ SUMMONING: Object summoning stopped, keeping entity at current position")
+      }
+    } else {
+      // Reset position and scale to original
+      entity.setPosition(originalPosition, relativeTo: nil)
+
+      if let originalScale = originalEntityScale {
+        entity.scale = originalScale
+      }
+
+      if isDebugMode {
+        print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position and scale")
+      }
+    }
 
     summoningEntity = nil
     originalEntityPosition = nil
+    originalEntityScale = nil
+    originalSummonDistance = nil
     summonStartTime = nil
-
-    if isDebugMode {
-      print("🧙‍♂️ SUMMONING: Object summoning stopped, returned to original position")
-    }
   }
 
   private func animateObjectTowardsUser(_ entity: ModelEntity, cameraPosition: SIMD3<Float>) {
@@ -161,6 +189,8 @@ extension ARViewContainer.Coordinator {
     }
     summoningEntity = nil
     originalEntityPosition = nil
+    originalEntityScale = nil
+    originalSummonDistance = nil
     summonStartTime = nil
 
     collectedEntities.insert(entity)
