@@ -1,2 +1,30 @@
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Xcode ###
 *.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+### Claude / AI Tools ###
+.auto-claude/
+.auto-claude-security.json
+.claude_settings.json
 memory-bank/
+
+### IDE ###
+.idea/
+*.swp
+*.swo
+*~
+
+### Build artifacts ###
+build/
+*.hmap
+*.modulemap
