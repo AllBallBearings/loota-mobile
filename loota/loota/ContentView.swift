@@ -1121,11 +1121,13 @@ public struct ContentView: View {
       }
       
       self.proximityMarkers = []
-      if !self.objectLocations.isEmpty && self.selectedObject == .none {
-        self.selectedObject = .coin
+      // Use hunt's objectType if specified, otherwise default to coin
+      let huntObjectType = huntData.objectType ?? .coin
+      if !self.objectLocations.isEmpty {
+        self.selectedObject = huntObjectType
       }
       let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
-      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), AR objects created: \(self.objectLocations.count)")
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), AR objects created: \(self.objectLocations.count), objectType: \(huntObjectType.rawValue)")
 
     case .proximity:
       print("ContentView loadHuntData: Processing \(huntData.pins.count) pins for proximity")
@@ -1153,9 +1155,10 @@ public struct ContentView: View {
       }
       
       self.objectLocations = []
-      self.selectedObject = .coin  // Default to coin for proximity
+      // Use hunt's objectType if specified, otherwise default to coin
+      self.selectedObject = huntData.objectType ?? .coin
       let collectedCount = huntData.pins.filter { $0.collectedByUserId != nil }.count
-      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count)")
+      print("ContentView loadHuntData: Total pins: \(huntData.pins.count), Collected: \(collectedCount), Proximity markers created: \(self.proximityMarkers.count), objectType: \(self.selectedObject.rawValue)")
     }
   }
 
