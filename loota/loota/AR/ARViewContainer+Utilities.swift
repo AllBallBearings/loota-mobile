@@ -6,8 +6,17 @@ import UIKit
 
 extension ARViewContainer.Coordinator {
   // Helper to create model entity based on type
+  // In debug mode, respects the debugObjectTypeOverride if set
   func createEntity(for type: ARObjectType) -> ModelEntity? {
-    switch type {
+    // Use debug override if set and in debug mode
+    let effectiveType: ARObjectType
+    if isDebugMode, let override = debugObjectTypeOverride, override != .none {
+      effectiveType = override
+    } else {
+      effectiveType = type
+    }
+
+    switch effectiveType {
     case .coin:
       return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
     case .dollarSign:

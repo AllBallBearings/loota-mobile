@@ -30,6 +30,7 @@ public struct ARViewContainer: UIViewRepresentable {
   @Binding public var showHorizonLine: Bool
   @Binding public var isPerformanceMode: Bool
   @Binding public var isLoadingModels: Bool
+  @Binding public var debugObjectTypeOverride: ARObjectType?
 
   public init(
     objectLocations: Binding<[CLLocationCoordinate2D]>,
@@ -49,7 +50,8 @@ public struct ARViewContainer: UIViewRepresentable {
     isDebugMode: Binding<Bool>,
     showHorizonLine: Binding<Bool>,
     isPerformanceMode: Binding<Bool>,
-    isLoadingModels: Binding<Bool>
+    isLoadingModels: Binding<Bool>,
+    debugObjectTypeOverride: Binding<ARObjectType?>
   ) {
     print(
       "ARViewContainer init: objectType=\(objectType.wrappedValue.rawValue), objectLocations.count=\(objectLocations.wrappedValue.count), refLocation=\(String(describing: referenceLocation)), heading=\(String(describing: heading.wrappedValue?.trueHeading)), huntType=\(String(describing: currentHuntType.wrappedValue)), proximityMarkers.count=\(proximityMarkers.wrappedValue.count))"
@@ -72,6 +74,7 @@ public struct ARViewContainer: UIViewRepresentable {
     self._showHorizonLine = showHorizonLine
     self._isPerformanceMode = isPerformanceMode
     self._isLoadingModels = isLoadingModels
+    self._debugObjectTypeOverride = debugObjectTypeOverride
   }
 
   // MARK: - UIViewRepresentable Methods
@@ -228,7 +231,8 @@ public struct ARViewContainer: UIViewRepresentable {
       isDebugMode: $isDebugMode,
       showHorizonLine: $showHorizonLine,
       isPerformanceMode: $isPerformanceMode,
-      isLoadingModels: $isLoadingModels
+      isLoadingModels: $isLoadingModels,
+      debugObjectTypeOverride: $debugObjectTypeOverride
     )
     coordinator.placeObjectsAction = coordinator.placeObjectsInARView
     return coordinator

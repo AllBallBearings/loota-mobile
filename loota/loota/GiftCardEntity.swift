@@ -49,9 +49,7 @@ enum GiftCardEntityFactory {
           }
         },
         receiveValue: { model in
-          // Reset rotation to identity on the cached model
-          // This ensures clones start with correct orientation
-          model.transform.rotation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+          // Cache the raw model - rotation will be applied when cloning
           cachedGiftCardModel = model
           isLoadingGiftCardModel = false
           completion?(true)
@@ -69,8 +67,9 @@ enum GiftCardEntityFactory {
       giftCardModel.scale = SIMD3<Float>(repeating: 0.12)
       giftCardModel.name = "giftcard_model"
 
-      // Keep the USDZ model's authored orientation.
-      // The test view confirms it is already upright without extra rotation.
+      // Apply Blender-to-ARKit coordinate system conversion
+      // This converts from Z-up (Blender) to Y-up (ARKit), matching DollarSign behavior
+      ModelTransformUtilities.applyBlenderToARKitConversion(giftCardModel)
 
       return giftCardModel
     }
