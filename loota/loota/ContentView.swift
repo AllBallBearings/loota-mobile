@@ -24,6 +24,7 @@ public struct ContentView: View {
   @State private var showHorizonLine: Bool = false
   @State private var isPerformanceMode: Bool = false
   @State private var showGiftCardTest: Bool = false
+  @State private var showARSimulator: Bool = false
   @State private var debugObjectTypeOverride: ARObjectType? = nil
 
   @StateObject private var locationManager = LocationManager()
@@ -47,6 +48,14 @@ public struct ContentView: View {
   private var showSimulatorPreview: Bool {
     #if targetEnvironment(simulator)
     return ProcessInfo.processInfo.arguments.contains("SIMULATOR_COIN")
+    #else
+    return false
+    #endif
+  }
+
+  private var shouldAutoLaunchARSimulator: Bool {
+    #if targetEnvironment(simulator)
+    return ProcessInfo.processInfo.arguments.contains("AR_SIMULATOR_TEST")
     #else
     return false
     #endif
@@ -135,6 +144,14 @@ public struct ContentView: View {
         }
         .onAppear {
           print("[Auto Claude] Main content view loaded successfully")
+
+          // Auto-launch AR simulator if launched with AR_SIMULATOR_TEST argument
+          if shouldAutoLaunchARSimulator {
+            showingSplash = false
+            showARSimulator = true
+            return
+          }
+
           // Show splash for 2 seconds, then start initialization
           DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             withAnimation(.easeInOut(duration: 0.5)) {
@@ -806,6 +823,35 @@ public struct ContentView: View {
               )
             }
 
+            Button(action: {
+              showARSimulator = true
+            }) {
+              HStack(spacing: 12) {
+                Image(systemName: "arkit")
+                  .foregroundColor(LootaTheme.cosmicPurple)
+                  .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("AR Simulator")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(LootaTheme.textPrimary)
+                  Text("Test AR without hardware")
+                    .font(.caption)
+                    .foregroundColor(LootaTheme.textSecondary)
+                }
+                Spacer()
+              }
+              .padding(.vertical, 10)
+              .padding(.horizontal, 12)
+              .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                  .fill(Color.white.opacity(0.08))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                  )
+              )
+            }
+
             if !errorMessage.isEmpty {
               HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -945,6 +991,9 @@ public struct ContentView: View {
     }
     .fullScreenCover(isPresented: $showGiftCardTest) {
       GiftCardTestView()
+    }
+    .fullScreenCover(isPresented: $showARSimulator) {
+      ARSimulatorTestView()
     }
   }
 
