@@ -77,6 +77,31 @@ public struct PinData: Codable {
     try container.encodeIfPresent(objectType, forKey: .objectType)
   }
 
+  // Manual memberwise initializer for creating instances in code (tests, previews, mock data)
+  public init(
+    id: String? = nil, huntId: String? = nil,
+    lat: Double? = nil, lng: Double? = nil,
+    distanceFt: Double? = nil, directionStr: String? = nil,
+    x: Double? = nil, y: Double? = nil,
+    order: Int? = nil, createdAt: String? = nil,
+    collectedByUserId: String? = nil, collectedAt: String? = nil,
+    objectType: ARObjectType? = nil
+  ) {
+    self.id = id
+    self.huntId = huntId
+    self.lat = lat
+    self.lng = lng
+    self.distanceFt = distanceFt
+    self.directionStr = directionStr
+    self.x = x
+    self.y = y
+    self.order = order
+    self.createdAt = createdAt
+    self.collectedByUserId = collectedByUserId
+    self.collectedAt = collectedAt
+    self.objectType = objectType
+  }
+
   // Define CodingKeys for all properties
   private enum CodingKeys: String, CodingKey {
     case id, huntId, lat, lng, distanceFt, directionStr, x, y, order, createdAt, collectedByUserId, collectedAt, objectType

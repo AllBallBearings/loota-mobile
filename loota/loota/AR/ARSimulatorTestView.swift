@@ -145,7 +145,7 @@ enum MockHuntScenario: String, CaseIterable, Identifiable {
     return pins.compactMap { pin in
       guard let distFt = pin.distanceFt, let dir = pin.directionStr else { return nil }
       let distMeters = distFt * 0.3048
-      return ProximityMarkerData(id: UUID(), dist: distMeters, dir: dir)
+      return ProximityMarkerData(dist: distMeters, dir: dir)
     }
   }
 }
@@ -322,10 +322,10 @@ struct ARSimulatorTestView: View {
     .onDisappear {
       stopCameraUpdateLoop()
     }
-    .onChange(of: moveX) { _, val in cameraController.moveInputX = val }
-    .onChange(of: moveZ) { _, val in cameraController.moveInputZ = val }
-    .onChange(of: lookX) { _, val in cameraController.lookInputX = val }
-    .onChange(of: lookY) { _, val in cameraController.lookInputY = val }
+    .onChange(of: moveX) { newVal in cameraController.moveInputX = newVal }
+    .onChange(of: moveZ) { newVal in cameraController.moveInputZ = newVal }
+    .onChange(of: lookX) { newVal in cameraController.lookInputX = newVal }
+    .onChange(of: lookY) { newVal in cameraController.lookInputY = newVal }
     .sheet(isPresented: $showScenarioSelector) {
       scenarioSelectorSheet
     }
