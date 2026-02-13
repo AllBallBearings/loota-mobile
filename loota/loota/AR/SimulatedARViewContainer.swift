@@ -3,12 +3,12 @@
 // Uses RealityKit in nonAR mode with a programmatic camera that can be controlled
 // via on-screen joysticks to simulate phone movement.
 
+import AVFoundation
 import CoreLocation
 import Foundation
 import RealityKit
 import SwiftUI
 import UIKit
-import AVFoundation
 
 public struct SimulatedARViewContainer: UIViewRepresentable {
   @Binding public var objectLocations: [CLLocationCoordinate2D]
@@ -32,34 +32,64 @@ public struct SimulatedARViewContainer: UIViewRepresentable {
   @Binding public var debugObjectTypeOverride: ARObjectType?
 
   // Simulated camera state controlled by external joystick inputs
-  @Binding public var simulatedCameraYaw: Float    // Left-right rotation (radians)
-  @Binding public var simulatedCameraPitch: Float   // Up-down tilt (radians)
-  @Binding public var simulatedCameraX: Float       // World X position
-  @Binding public var simulatedCameraY: Float       // World Y position (height)
-  @Binding public var simulatedCameraZ: Float       // World Z position
+  @Binding public var simulatedCameraYaw: Float  // Left-right rotation (radians)
+  @Binding public var simulatedCameraPitch: Float  // Up-down tilt (radians)
+  @Binding public var simulatedCameraX: Float  // World X position
+  @Binding public var simulatedCameraY: Float  // World Y position (height)
+  @Binding public var simulatedCameraZ: Float  // World Z position
+
+  private func placementKey() -> String {
+    let hunt = currentHuntType?.rawValue ?? "none"
+    let ref = referenceLocation.map { "\($0.latitude),\($0.longitude)" } ?? "nil"
+    let pins = pinData.map { pin in
+      let lat = pin.lat.map { String($0) } ?? "nil"
+      let lng = pin.lng.map { String($0) } ?? "nil"
+      let dist = pin.distanceFt.map { String($0) } ?? "nil"
+      let dir = pin.directionStr ?? "nil"
+      let pinId = pin.id ?? "nil"
+      let order = pin.order.map { String($0) } ?? "nil"
+      let lootType = pin.objectType?.rawValue ?? "nil"
+      return "\(pinId)|\(order)|\(lootType)|\(lat)|\(lng)|\(dist)|\(dir)"
+    }.joined(separator: ";")
+    let geo = objectLocations.map { "\($0.latitude),\($0.longitude)" }.joined(separator: ";")
+    let prox = proximityMarkers.map { "\($0.dist),\($0.dir)" }.joined(separator: ";")
+    return
+      "hunt:\(hunt)|ref:\(ref)|objType:\(objectType.rawValue)|pins:\(pins)|geo:\(geo)|prox:\(prox)"
+  }
 
   public func makeUIView(context: Context) -> ARView {
+    #if targetEnvironment(simulator)
+      let isSimulatorBuild = true
+    #else
+      let isSimulatorBuild = false
+    #endif
+
     let screenBounds = UIScreen.main.bounds
-    let arView = ARView(frame: screenBounds, cameraMode: .nonAR, automaticallyConfigureSession: false)
+    let arView = ARView(
+      frame: screenBounds, cameraMode: .nonAR, automaticallyConfigureSession: false)
+    // Simulator harness uses SwiftUI controls, so ARView should never intercept touches.
+    arView.isUserInteractionEnabled = false
 
     // Dark environment background to simulate outdoor scene
     arView.environment.background = .color(UIColor(red: 0.1, green: 0.12, blue: 0.18, alpha: 1.0))
     arView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-    // Add lighting
-    let lightAnchor = AnchorEntity(world: .zero)
-    let directionalLight = DirectionalLight()
-    directionalLight.light.color = .white
-    directionalLight.light.intensity = 3000
-    directionalLight.orientation = simd_quatf(angle: -.pi / 3, axis: [1, 0, 0])
-    lightAnchor.addChild(directionalLight)
+    if !isSimulatorBuild {
+      // Add lighting on device builds only. Simulator keeps unlit materials for performance.
+      let lightAnchor = AnchorEntity(world: .zero)
+      let directionalLight = DirectionalLight()
+      directionalLight.light.color = .white
+      directionalLight.light.intensity = 3000
+      directionalLight.orientation = simd_quatf(angle: -.pi / 3, axis: [1, 0, 0])
+      lightAnchor.addChild(directionalLight)
 
-    let ambientLight = DirectionalLight()
-    ambientLight.light.color = UIColor(white: 0.6, alpha: 1.0)
-    ambientLight.light.intensity = 1000
-    ambientLight.orientation = simd_quatf(angle: .pi / 4, axis: [1, 0, 0])
-    lightAnchor.addChild(ambientLight)
-    arView.scene.addAnchor(lightAnchor)
+      let ambientLight = DirectionalLight()
+      ambientLight.light.color = UIColor(white: 0.6, alpha: 1.0)
+      ambientLight.light.intensity = 1000
+      ambientLight.orientation = simd_quatf(angle: .pi / 4, axis: [1, 0, 0])
+      lightAnchor.addChild(ambientLight)
+      arView.scene.addAnchor(lightAnchor)
+    }
 
     // Create camera
     let cameraAnchor = AnchorEntity(world: .zero)
@@ -84,7 +114,8 @@ public struct SimulatedARViewContainer: UIViewRepresentable {
     // Setup display link for animations
     let displayLink = CADisplayLink(
       target: context.coordinator, selector: #selector(SimCoordinator.updateFrame))
-    displayLink.add(to: .main, forMode: .default)
+    displayLink.preferredFramesPerSecond = isSimulatorBuild ? 30 : 60
+    displayLink.add(to: .main, forMode: .common)
     context.coordinator.displayLink = displayLink
 
     // Initial camera position
@@ -93,7 +124,8 @@ public struct SimulatedARViewContainer: UIViewRepresentable {
       x: simulatedCameraX, y: simulatedCameraY, z: simulatedCameraZ)
 
     // Attempt placement after a short delay to let models load
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+    let placementDelay: TimeInterval = isSimulatorBuild ? 0.1 : 0.5
+    DispatchQueue.main.asyncAfter(deadline: .now() + placementDelay) {
       context.coordinator.attemptPlacementIfReady()
     }
 
@@ -115,9 +147,18 @@ public struct SimulatedARViewContainer: UIViewRepresentable {
 
     context.coordinator.onCoinCollected = self.onCoinCollected
 
+    let newPlacementKey = placementKey()
+    if context.coordinator.lastPlacementKey != newPlacementKey {
+      context.coordinator.lastPlacementKey = newPlacementKey
+      context.coordinator.hasPlacedObjects = false
+      context.coordinator.clearAnchors()
+    }
+
     // Attempt placement if not already done
     if !context.coordinator.hasPlacedObjects {
-      context.coordinator.attemptPlacementIfReady()
+      DispatchQueue.main.async {
+        context.coordinator.attemptPlacementIfReady()
+      }
     }
   }
 
@@ -146,6 +187,11 @@ public struct SimulatedARViewContainer: UIViewRepresentable {
 // MARK: - Simulated Coordinator
 
 public class SimCoordinator: NSObject {
+  #if targetEnvironment(simulator)
+    private let usesLightweightSimulatorAssets = true
+  #else
+    private let usesLightweightSimulatorAssets = false
+  #endif
   // Location
   public var referenceLocation: CLLocationCoordinate2D?
 
@@ -187,6 +233,9 @@ public class SimCoordinator: NSObject {
   var animationTime: Float = 0
   var frameCounter: Int = 0
   var audioPlayer: AVAudioPlayer?
+  var cachedCoinStarModel: ModelEntity?
+  var didAttemptCoinStarLoad = false
+  var lastPlacementKey: String?
 
   // Focus and summoning
   var focusedEntity: ModelEntity?
@@ -197,6 +246,7 @@ public class SimCoordinator: NSObject {
   var wasSummoningActive: Bool = false
   let focusRange: Float = 5.0
   let summonSpeed: Float = 0.8
+  let baseHoverHeight: Float = 1.22  // ~4 feet average hover height
 
   // Ground plane
   var groundEntity: ModelEntity?
@@ -245,21 +295,21 @@ public class SimCoordinator: NSObject {
   // MARK: - Camera Control
 
   func updateCameraTransform(yaw: Float, pitch: Float, x: Float, y: Float, z: Float) {
-    guard let cameraAnchor = cameraAnchor else { return }
-
     // Build rotation: yaw around Y, then pitch around X
     let yawRotation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
     let pitchRotation = simd_quatf(angle: pitch, axis: SIMD3<Float>(1, 0, 0))
     let combinedRotation = yawRotation * pitchRotation
 
-    cameraAnchor.position = SIMD3<Float>(x, y, z)
-    cameraAnchor.orientation = combinedRotation
+    cameraAnchor?.position = SIMD3<Float>(x, y, z)
+    cameraAnchor?.orientation = combinedRotation
 
     // Build the 4x4 transform matrix for collection/focus detection
     let rotationMatrix = simd_matrix4x4(combinedRotation)
     var translationMatrix = matrix_identity_float4x4
     translationMatrix.columns.3 = SIMD4<Float>(x, y, z, 1)
     simulatedCameraTransform = translationMatrix * rotationMatrix
+
+    // Keep a copy for focus/collection math; rendered camera is driven by cameraAnchor.
   }
 
   // MARK: - Ground Plane
@@ -268,13 +318,13 @@ public class SimCoordinator: NSObject {
     let groundAnchor = AnchorEntity(world: .zero)
 
     // Create a large grid ground plane
-    let gridSize: Float = 100.0
+    let gridSize: Float = usesLightweightSimulatorAssets ? 24.0 : 100.0
     let gridMaterial = UnlitMaterial(color: UIColor(white: 0.25, alpha: 0.8))
     let ground = ModelEntity(
       mesh: .generatePlane(width: gridSize, depth: gridSize),
       materials: [gridMaterial]
     )
-    ground.position = SIMD3<Float>(0, -0.01, 0) // Slightly below origin
+    ground.position = SIMD3<Float>(0, -0.01, 0)  // Slightly below origin
     groundAnchor.addChild(ground)
     groundEntity = ground
 
@@ -282,7 +332,7 @@ public class SimCoordinator: NSObject {
     let lineColor = UIColor(white: 0.35, alpha: 0.6)
     let lineMaterial = UnlitMaterial(color: lineColor)
     let lineThickness: Float = 0.02
-    let lineSpacing: Float = 1.0 // 1 meter grid
+    let lineSpacing: Float = usesLightweightSimulatorAssets ? 2.0 : 1.0
     let lineCount = Int(gridSize / lineSpacing / 2)
 
     for i in -lineCount...lineCount {
@@ -305,29 +355,31 @@ public class SimCoordinator: NSObject {
       groundAnchor.addChild(zLine)
     }
 
-    // Add cardinal direction markers
-    let directions: [(String, SIMD3<Float>, UIColor)] = [
-      ("N", SIMD3<Float>(0, 0.1, -5), .red),
-      ("S", SIMD3<Float>(0, 0.1, 5), .blue),
-      ("E", SIMD3<Float>(5, 0.1, 0), .green),
-      ("W", SIMD3<Float>(-5, 0.1, 0), .yellow),
-    ]
+    if !usesLightweightSimulatorAssets {
+      // Add cardinal direction markers
+      let directions: [(String, SIMD3<Float>, UIColor)] = [
+        ("N", SIMD3<Float>(0, 0.1, -5), .red),
+        ("S", SIMD3<Float>(0, 0.1, 5), .blue),
+        ("E", SIMD3<Float>(5, 0.1, 0), .green),
+        ("W", SIMD3<Float>(-5, 0.1, 0), .yellow),
+      ]
 
-    for (text, position, color) in directions {
-      let textMesh = MeshResource.generateText(
-        text,
-        extrusionDepth: 0.02,
-        font: .systemFont(ofSize: 0.5),
-        containerFrame: .zero,
-        alignment: .center,
-        lineBreakMode: .byWordWrapping
-      )
-      let material = UnlitMaterial(color: color)
-      let label = ModelEntity(mesh: textMesh, materials: [material])
-      label.position = position
-      // Rotate to face up
-      label.orientation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
-      groundAnchor.addChild(label)
+      for (text, position, color) in directions {
+        let textMesh = MeshResource.generateText(
+          text,
+          extrusionDepth: 0.02,
+          font: .systemFont(ofSize: 0.5),
+          containerFrame: .zero,
+          alignment: .center,
+          lineBreakMode: .byWordWrapping
+        )
+        let material = UnlitMaterial(color: color)
+        let label = ModelEntity(mesh: textMesh, materials: [material])
+        label.position = position
+        // Rotate to face up
+        label.orientation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
+        groundAnchor.addChild(label)
+      }
     }
 
     // Add origin marker (red/green/blue axes)
@@ -368,13 +420,14 @@ public class SimCoordinator: NSObject {
       effectiveType = type
     }
 
+    if usesLightweightSimulatorAssets {
+      return createLightweightEntity(for: effectiveType)
+    }
+
     switch effectiveType {
     case .coin:
       return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
     case .dollarSign:
-      if let dollarSign = DollarSignEntityFactory.make() {
-        return dollarSign
-      }
       return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
     case .giftCard:
       return GiftCardEntityFactory.makeGiftCard()
@@ -383,10 +436,67 @@ public class SimCoordinator: NSObject {
     }
   }
 
+  private func createLightweightEntity(for type: ARObjectType) -> ModelEntity? {
+    switch type {
+    case .coin:
+      return makeSimulatorCoinEntity()
+    case .dollarSign:
+      return makeSimulatorCoinEntity()
+    case .giftCard:
+      return GiftCardEntityFactory.makeGiftCard()
+    case .none:
+      return nil
+    }
+  }
+
+  private func makeSimulatorCoinEntity() -> ModelEntity {
+    if let cachedCoinStarModel {
+      let clone = cachedCoinStarModel.clone(recursive: true)
+      clone.scale = SIMD3<Float>(repeating: 0.12)
+      clone.name = "coin_star_model"
+      return clone
+    }
+
+    if !didAttemptCoinStarLoad {
+      didAttemptCoinStarLoad = true
+      if let loadedEntity = try? Entity.load(named: "CoinStar") {
+        if let coinStarModel = loadedEntity as? ModelEntity {
+          cachedCoinStarModel = coinStarModel
+          let clone = coinStarModel.clone(recursive: true)
+          clone.scale = SIMD3<Float>(repeating: 0.12)
+          clone.name = "coin_star_model"
+          return clone
+        }
+
+        if let firstModelChild = loadedEntity.children.first(where: { $0 is ModelEntity })
+          as? ModelEntity
+        {
+          cachedCoinStarModel = firstModelChild
+          let clone = firstModelChild.clone(recursive: true)
+          clone.scale = SIMD3<Float>(repeating: 0.12)
+          clone.name = "coin_star_model"
+          return clone
+        }
+      }
+      print("⚠️ SIM: Failed to load CoinStar.usdz, falling back to default coin model")
+    }
+
+    return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
+  }
+
   // MARK: - Placement
 
   func attemptPlacementIfReady() {
     guard !hasPlacedObjects else { return }
+    guard self.referenceLocation != nil else { return }
+
+    if usesLightweightSimulatorAssets {
+      preloadLightweightAssetsIfNeeded()
+      hasPlacedObjects = true
+      clearAnchors()
+      placeObjects()
+      return
+    }
 
     // Preload models if needed
     let needsCoinModel = (self.currentHuntType == .proximity) || (self.objectType == .coin)
@@ -394,22 +504,6 @@ public class SimCoordinator: NSObject {
       if !CoinEntityFactory.isCoinModelLoading {
         self.isLoadingModels = true
         CoinEntityFactory.preloadCoinModel { [weak self] _ in
-          DispatchQueue.main.async {
-            self?.isLoadingModels = false
-            self?.attemptPlacementIfReady()
-          }
-        }
-      }
-      return
-    }
-
-    let needsDollarModel =
-      (self.objectType == .dollarSign)
-      || self.pinData.contains(where: { $0.objectType == .dollarSign })
-    if needsDollarModel && DollarSignEntityFactory.shouldDeferPlacement {
-      if !DollarSignEntityFactory.isModelLoading {
-        self.isLoadingModels = true
-        DollarSignEntityFactory.preload { [weak self] _ in
           DispatchQueue.main.async {
             self?.isLoadingModels = false
             self?.attemptPlacementIfReady()
@@ -435,11 +529,27 @@ public class SimCoordinator: NSObject {
       return
     }
 
-    guard self.referenceLocation != nil else { return }
-
     hasPlacedObjects = true
     clearAnchors()
     placeObjects()
+  }
+
+  private func preloadLightweightAssetsIfNeeded() {
+    let needsGiftCardModel =
+      (self.objectType == .giftCard)
+      || self.pinData.contains(where: { $0.objectType == .giftCard })
+    if needsGiftCardModel && GiftCardEntityFactory.shouldDeferPlacementForGiftCardModel
+      && !GiftCardEntityFactory.isGiftCardModelLoading
+    {
+      GiftCardEntityFactory.preloadGiftCardModel { [weak self] loaded in
+        guard loaded, let self = self else { return }
+        DispatchQueue.main.async {
+          self.hasPlacedObjects = false
+          self.clearAnchors()
+          self.attemptPlacementIfReady()
+        }
+      }
+    }
   }
 
   private func placeObjects() {
@@ -484,6 +594,7 @@ public class SimCoordinator: NSObject {
     let objectAnchor = AnchorEntity()
     objectAnchor.position = position
     objectAnchor.addChild(entity)
+    entity.position.y = baseHoverHeight
 
     entityToPinId[entity] = pinId
     baseOrientations[entity] = entity.transform.rotation
@@ -491,12 +602,12 @@ public class SimCoordinator: NSObject {
 
     // Always show labels in simulator for debugging
     let numberLabel = createLabelEntity(text: "\(markerNumber)")
-    numberLabel.position = SIMD3<Float>(0, 0.25, 0)
+    numberLabel.position = SIMD3<Float>(0, baseHoverHeight + 0.25, 0)
     objectAnchor.addChild(numberLabel)
 
     let shortId = pinId.prefix(8)
     let idLabel = createLabelEntity(text: String(shortId))
-    idLabel.position = SIMD3<Float>(0, 0.1, 0)
+    idLabel.position = SIMD3<Float>(0, baseHoverHeight + 0.1, 0)
     objectAnchor.addChild(idLabel)
 
     baseAnchor.addChild(objectAnchor)
@@ -531,13 +642,17 @@ public class SimCoordinator: NSObject {
 
     guard !coinEntities.isEmpty else { return }
 
-    // Focus detection every 6 frames
-    if frameCounter % 6 == 0 {
+    let focusInterval = usesLightweightSimulatorAssets ? 12 : 6
+    let nearestInterval = usesLightweightSimulatorAssets ? 18 : 9
+    let collectionInterval = usesLightweightSimulatorAssets ? 6 : 3
+
+    // Focus detection
+    if frameCounter % focusInterval == 0 {
       updateFocusDetection()
     }
 
-    // Nearest loot tracking every 9 frames
-    if frameCounter % 9 == 0 {
+    // Nearest loot tracking
+    if frameCounter % nearestInterval == 0 {
       updateNearestLoot()
     }
 
@@ -556,9 +671,10 @@ public class SimCoordinator: NSObject {
       guard entity != summoningEntity else { continue }
 
       let spinRotation = simd_quatf(angle: spinAngle, axis: SIMD3<Float>(0, 1, 0))
-      let baseRotation = baseOrientations[entity] ?? simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+      let baseRotation =
+        baseOrientations[entity] ?? simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
       entity.transform.rotation = spinRotation * baseRotation
-      entity.position.y = bobOffset
+      entity.position.y = baseHoverHeight + bobOffset
     }
 
     // Summoning movement
@@ -595,7 +711,8 @@ public class SimCoordinator: NSObject {
 
         // Scale effect
         if let originalScale = originalEntityScale,
-           let originalDistance = originalSummonDistance {
+          let originalDistance = originalSummonDistance
+        {
           let distanceRemaining = max(distance - summonedCollectionDistance, 0)
           let totalTravelDistance = max(originalDistance - summonedCollectionDistance, 0.1)
           let progress = 1.0 - (distanceRemaining / totalTravelDistance)
@@ -605,8 +722,8 @@ public class SimCoordinator: NSObject {
       }
     }
 
-    // Collection detection every 3 frames
-    if frameCounter % 3 == 0 {
+    // Collection detection
+    if frameCounter % collectionInterval == 0 {
       checkCollections()
     }
   }
@@ -630,9 +747,10 @@ public class SimCoordinator: NSObject {
       let normalCollectionDistance: Float = 0.25
       let summonedCollectionDistance: Float = 0.8
       let isSummonedObject = (entity == summoningEntity)
-      let collectionThreshold = isSummonedObject ? summonedCollectionDistance : normalCollectionDistance
+      let collectionThreshold =
+        isSummonedObject ? summonedCollectionDistance : normalCollectionDistance
 
-      if isSummonedObject { continue } // Handled by summoning movement
+      if isSummonedObject { continue }  // Handled by summoning movement
 
       if distance < collectionThreshold {
         collectedEntities.insert(entity)
@@ -664,11 +782,12 @@ public class SimCoordinator: NSObject {
       simulatedCameraTransform.columns.3.y,
       simulatedCameraTransform.columns.3.z)
 
-    let forwardVector = normalize(SIMD3<Float>(
-      -simulatedCameraTransform.columns.2.x,
-      -simulatedCameraTransform.columns.2.y,
-      -simulatedCameraTransform.columns.2.z
-    ))
+    let forwardVector = normalize(
+      SIMD3<Float>(
+        -simulatedCameraTransform.columns.2.x,
+        -simulatedCameraTransform.columns.2.y,
+        -simulatedCameraTransform.columns.2.z
+      ))
 
     let focusConeAngle: Float = 8.0 * (.pi / 180.0)
 
@@ -691,7 +810,9 @@ public class SimCoordinator: NSObject {
 
       guard angle <= focusConeAngle else { continue }
 
-      if angle < smallestAngle || (abs(angle - smallestAngle) < 0.5 * (.pi / 180.0) && distance < closestDistance) {
+      if angle < smallestAngle
+        || (abs(angle - smallestAngle) < 0.5 * (.pi / 180.0) && distance < closestDistance)
+      {
         centerEntity = entity
         closestDistance = distance
         smallestAngle = angle
@@ -763,7 +884,8 @@ public class SimCoordinator: NSObject {
 
   func stopObjectSummoning() {
     guard let entity = summoningEntity,
-          let originalPosition = originalEntityPosition else {
+      let originalPosition = originalEntityPosition
+    else {
       summoningEntity = nil
       originalEntityPosition = nil
       originalEntityScale = nil
@@ -852,7 +974,9 @@ public class SimCoordinator: NSObject {
       case "W": baseAngle = 270
       default: return nil
       }
-    } else { return nil }
+    } else {
+      return nil
+    }
 
     if match.numberOfRanges > 2, let range2 = Range(match.range(at: 2), in: dir), !range2.isEmpty {
       deflectionAngle = Double(dir[range2]) ?? 0
@@ -866,8 +990,12 @@ public class SimCoordinator: NSObject {
       case ("N", "W"), ("E", "N"), ("S", "E"), ("W", "S"):
         deflectionDirection = -1
       default:
-        if dir.count == 1 { deflectionAngle = 0; deflectionDirection = 1 }
-        else { return nil }
+        if dir.count == 1 {
+          deflectionAngle = 0
+          deflectionDirection = 1
+        } else {
+          return nil
+        }
       }
     } else {
       if dir.count > 1 { return nil }
@@ -894,7 +1022,7 @@ public class SimCoordinator: NSObject {
   }
 
   func playCoinSound() {
-    guard let url = Bundle.main.url(forResource: "CoinPunch", withExtension: "mp3") else { return }
+    guard let url = Bundle.main.url(forResource: "MagicCoin1", withExtension: "mp3") else { return }
     do {
       let audioSession = AVAudioSession.sharedInstance()
       try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])

@@ -81,7 +81,7 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "SIMULATOR_COIN"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "file:///Users/jaredgoolsby/Documents/Github/loota/ar-view.html?hunt_type=proximity&amp;data=W3siZGlzdCI6Ny4yLCJkaXIiOiJXNzBOIn0seyJkaXN0Ijo1LjYsImRpciI6Ilc0Nk4ifSx7ImRpc3QiOjYuMywiZGlyIjoiTjgyRSJ9XQ=="

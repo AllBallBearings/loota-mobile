@@ -38,7 +38,8 @@ extension ARViewContainer.Coordinator {
       }
       return
     }
-    let cameraPosition = SIMD3<Float>(camera.transform.columns.3.x, camera.transform.columns.3.y, camera.transform.columns.3.z)
+    let cameraPosition = SIMD3<Float>(
+      camera.transform.columns.3.x, camera.transform.columns.3.y, camera.transform.columns.3.z)
     let entityPosition = targetEntity.position(relativeTo: nil)
     let distance = simd_distance(entityPosition, cameraPosition)
 
@@ -50,7 +51,9 @@ extension ARViewContainer.Coordinator {
     let summonedCollectionDistance: Float = 0.8
     if distance <= summonedCollectionDistance {
       if isDebugMode {
-        print("🧙‍♂️ SUMMONING: Entity already within collection range (\(distance)m <= \(summonedCollectionDistance)m) - collecting immediately!")
+        print(
+          "🧙‍♂️ SUMMONING: Entity already within collection range (\(distance)m <= \(summonedCollectionDistance)m) - collecting immediately!"
+        )
       }
       autoCollectSummonedEntity(targetEntity)
       return
@@ -83,7 +86,9 @@ extension ARViewContainer.Coordinator {
 
     if isDebugMode {
       print("🧙‍♂️ SUMMONING: Summoning state set - starting animation...")
-      print("🧙‍♂️ SUMMONING: Current state - buttonActive: \(isSummoningActiveBinding), summoningEntity != nil: \(summoningEntity != nil)")
+      print(
+        "🧙‍♂️ SUMMONING: Current state - buttonActive: \(isSummoningActiveBinding), summoningEntity != nil: \(summoningEntity != nil)"
+      )
     }
 
     if isDebugMode {
@@ -96,7 +101,9 @@ extension ARViewContainer.Coordinator {
 
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
       if self.isDebugMode {
-        print("🧙‍♂️ SUMMONING: 1s state check - buttonActive: \(self.isSummoningActiveBinding), entity exists: \(self.summoningEntity != nil)")
+        print(
+          "🧙‍♂️ SUMMONING: 1s state check - buttonActive: \(self.isSummoningActiveBinding), entity exists: \(self.summoningEntity != nil)"
+        )
       }
     }
   }
@@ -160,7 +167,8 @@ extension ARViewContainer.Coordinator {
   func autoCollectSummonedEntity(_ entity: ModelEntity) {
     if isDebugMode {
       print("🎯 AUTO_COLLECT: Attempting auto-collection")
-      print("🎯 AUTO_COLLECT: Current summoningEntity: \(summoningEntity?.debugDescription ?? "nil")")
+      print(
+        "🎯 AUTO_COLLECT: Current summoningEntity: \(summoningEntity?.debugDescription ?? "nil")")
       print("🎯 AUTO_COLLECT: Target entity: \(entity.debugDescription)")
       print("🎯 AUTO_COLLECT: Entities match: \(entity == summoningEntity)")
     }
@@ -177,7 +185,8 @@ extension ARViewContainer.Coordinator {
     }
 
     guard let entityIndex = coinEntities.firstIndex(of: entity),
-          let anchor = findAnchorForEntity(entity) else {
+      let anchor = findAnchorForEntity(entity)
+    else {
       if isDebugMode {
         print("🎯 AUTO_COLLECT: Could not find entity in arrays")
       }
@@ -237,13 +246,13 @@ extension ARViewContainer.Coordinator {
   }
 
   func playCoinSound() {
-    guard let url = Bundle.main.url(forResource: "CoinPunch", withExtension: "mp3") else {
-      print("❌ AUDIO: Missing CoinPunch.mp3 in app bundle")
+    guard let url = Bundle.main.url(forResource: "MagicCoin1", withExtension: "mp3") else {
+      print("❌ AUDIO: Missing MagicCoin1.mp3 in app bundle")
       print("📁 AUDIO: Bundle path: \(Bundle.main.bundlePath)")
       return
     }
 
-    print("✅ AUDIO: Found CoinPunch.mp3 at: \(url)")
+    print("✅ AUDIO: Found MagicCoin1.mp3 at: \(url)")
 
     do {
       let audioSession = AVAudioSession.sharedInstance()
@@ -264,7 +273,7 @@ extension ARViewContainer.Coordinator {
       impactFeedback.impactOccurred()
       print("📳 HAPTIC: Played haptic feedback for coin collection")
     } catch {
-      print("❌ AUDIO: Failed to play CoinPunch sound: \(error)")
+      print("❌ AUDIO: Failed to play MagicCoin1 sound: \(error)")
     }
   }
 }

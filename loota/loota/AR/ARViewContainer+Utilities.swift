@@ -20,10 +20,6 @@ extension ARViewContainer.Coordinator {
     case .coin:
       return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
     case .dollarSign:
-      if let dollarSign = DollarSignEntityFactory.make() {
-        return dollarSign
-      }
-      print("⚠️ DOLLAR_MODEL: USDZ not ready yet - using coin fallback")
       return CoinEntityFactory.makeCoin(style: CoinConfiguration.selectedStyle)
     case .giftCard:
       return GiftCardEntityFactory.makeGiftCard()
