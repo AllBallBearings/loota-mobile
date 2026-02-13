@@ -94,6 +94,9 @@ struct SimulatedARControlPanel: View {
   // Summoning
   @Binding var isSummoningActive: Bool
 
+  // Movement/look speed multiplier
+  @Binding var speedMultiplier: Float
+
   // Camera info
   var cameraYaw: Float
   var cameraPitch: Float
@@ -101,9 +104,7 @@ struct SimulatedARControlPanel: View {
   var cameraZ: Float
   var focusedLootId: String?
   var focusedLootDistance: Float?
-
-  // Speed multiplier
-  @State private var speedMultiplier: Float = 1.0
+  var onReset: () -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -239,7 +240,7 @@ struct SimulatedARControlPanel: View {
           )
 
           // Reset button
-          Button(action: {}) {
+          Button(action: onReset) {
             Text("RESET")
               .font(.system(size: 10, weight: .medium))
               .foregroundColor(.white.opacity(0.7))
@@ -260,10 +261,6 @@ struct SimulatedARControlPanel: View {
       )
     }
     .environment(\.colorScheme, .dark)
-  }
-
-  var effectiveSpeedMultiplier: Float {
-    speedMultiplier
   }
 }
 
@@ -289,7 +286,7 @@ class SimulatedCameraController: ObservableObject {
 
   func update(deltaTime: Float) {
     // Update look direction
-    yaw += lookInputX * lookSpeed * deltaTime * speedMultiplier
+    yaw -= lookInputX * lookSpeed * deltaTime * speedMultiplier
     pitch += lookInputY * lookSpeed * deltaTime * speedMultiplier
     pitch = max(min(pitch, .pi / 2.5), -.pi / 2.5) // Clamp pitch
 

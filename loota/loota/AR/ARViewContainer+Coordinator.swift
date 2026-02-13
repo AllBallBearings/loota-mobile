@@ -179,26 +179,6 @@ extension ARViewContainer {
         return
       }
 
-      let needsDollarModel =
-        (self.objectType == .dollarSign)
-        || self.pinData.contains(where: { $0.objectType == .dollarSign })
-      if needsDollarModel && DollarSignEntityFactory.shouldDeferPlacement {
-        if !DollarSignEntityFactory.isModelLoading {
-          print("💵 DOLLAR_MODEL: Preloading USDZ before placement")
-          self.isLoadingModels = true
-          DollarSignEntityFactory.preload { [weak self] success in
-            DispatchQueue.main.async {
-              self?.isLoadingModels = false
-              self?.attemptPlacementIfReady()
-            }
-          }
-        } else {
-          print("💵 DOLLAR_MODEL: Waiting for USDZ preload to finish")
-          self.isLoadingModels = true
-        }
-        return
-      }
-
       let needsGiftCardModel =
         (self.objectType == .giftCard)
         || self.pinData.contains(where: { $0.objectType == .giftCard })

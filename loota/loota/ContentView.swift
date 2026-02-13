@@ -46,16 +46,12 @@ public struct ContentView: View {
   }
 
   private var showSimulatorPreview: Bool {
-    #if targetEnvironment(simulator)
-    return ProcessInfo.processInfo.arguments.contains("SIMULATOR_COIN")
-    #else
     return false
-    #endif
   }
 
   private var shouldAutoLaunchARSimulator: Bool {
     #if targetEnvironment(simulator)
-    return ProcessInfo.processInfo.arguments.contains("AR_SIMULATOR_TEST")
+    return true
     #else
     return false
     #endif
@@ -148,6 +144,9 @@ public struct ContentView: View {
           // Auto-launch AR simulator if launched with AR_SIMULATOR_TEST argument
           if shouldAutoLaunchARSimulator {
             showingSplash = false
+            isInitializing = false
+            isLoadingLoot = false
+            isLoadingModels = false
             showARSimulator = true
             return
           }

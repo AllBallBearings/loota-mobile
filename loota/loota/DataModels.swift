@@ -25,6 +25,37 @@ public struct PinData: Codable {
   public let collectedAt: String?
   public let objectType: ARObjectType?  // Loot type (coin, giftCard, dollarSign)
 
+  // Regular memberwise initializer (needed because custom init(from:) suppresses the default)
+  public init(
+    id: String? = nil,
+    huntId: String? = nil,
+    lat: Double? = nil,
+    lng: Double? = nil,
+    distanceFt: Double? = nil,
+    directionStr: String? = nil,
+    x: Double? = nil,
+    y: Double? = nil,
+    order: Int? = nil,
+    createdAt: String? = nil,
+    collectedByUserId: String? = nil,
+    collectedAt: String? = nil,
+    objectType: ARObjectType? = nil
+  ) {
+    self.id = id
+    self.huntId = huntId
+    self.lat = lat
+    self.lng = lng
+    self.distanceFt = distanceFt
+    self.directionStr = directionStr
+    self.x = x
+    self.y = y
+    self.order = order
+    self.createdAt = createdAt
+    self.collectedByUserId = collectedByUserId
+    self.collectedAt = collectedAt
+    self.objectType = objectType
+  }
+
   // Custom initializer to handle flexible lat/lng decoding (String or Double)
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)

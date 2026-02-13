@@ -188,6 +188,7 @@ struct ARSimulatorTestView: View {
 
   // Display link for camera updates
   @State private var displayLink: CADisplayLink?
+  @State private var speedMultiplier: Float = 1.0
 
   @SwiftUI.Environment(\.dismiss) private var dismiss
 
@@ -224,6 +225,7 @@ struct ARSimulatorTestView: View {
         simulatedCameraZ: $cameraController.positionZ
       )
       .edgesIgnoringSafeArea(.all)
+      .allowsHitTesting(false)
 
       // Status overlay
       VStack {
@@ -307,12 +309,14 @@ struct ARSimulatorTestView: View {
         lookY: $lookY,
         cameraHeight: $cameraController.positionY,
         isSummoningActive: $isSummoningActive,
+        speedMultiplier: $speedMultiplier,
         cameraYaw: cameraController.yaw,
         cameraPitch: cameraController.pitch,
         cameraX: cameraController.positionX,
         cameraZ: cameraController.positionZ,
         focusedLootId: focusedLootId,
-        focusedLootDistance: focusedLootDistance
+        focusedLootDistance: focusedLootDistance,
+        onReset: resetCamera
       )
     }
     .onAppear {
@@ -322,10 +326,11 @@ struct ARSimulatorTestView: View {
     .onDisappear {
       stopCameraUpdateLoop()
     }
-    .onChange(of: moveX) { newVal in cameraController.moveInputX = newVal }
-    .onChange(of: moveZ) { newVal in cameraController.moveInputZ = newVal }
-    .onChange(of: lookX) { newVal in cameraController.lookInputX = newVal }
-    .onChange(of: lookY) { newVal in cameraController.lookInputY = newVal }
+    .onChange(of: moveX) { val in cameraController.moveInputX = val }
+    .onChange(of: moveZ) { val in cameraController.moveInputZ = val }
+    .onChange(of: lookX) { val in cameraController.lookInputX = val }
+    .onChange(of: lookY) { val in cameraController.lookInputY = val }
+    .onChange(of: speedMultiplier) { val in cameraController.speedMultiplier = val }
     .sheet(isPresented: $showScenarioSelector) {
       scenarioSelectorSheet
     }
@@ -372,6 +377,8 @@ struct ARSimulatorTestView: View {
     focusedLootId = nil
     focusedLootDistance = nil
     cameraController.reset()
+    speedMultiplier = 1.0
+    cameraController.speedMultiplier = 1.0
 
     // Load hunt data
     currentHuntType = scenario.huntType
@@ -388,9 +395,16 @@ struct ARSimulatorTestView: View {
   // MARK: - Camera Update Loop
 
   private func startCameraUpdateLoop() {
-    let link = CADisplayLink(target: CameraUpdateTarget(controller: cameraController, view: self),
+    #if targetEnvironment(simulator)
+    let targetFPS = 30
+    #else
+    let targetFPS = 60
+    #endif
+
+    let link = CADisplayLink(target: CameraUpdateTarget(controller: cameraController),
                              selector: #selector(CameraUpdateTarget.update))
-    link.add(to: .main, forMode: .default)
+    link.preferredFramesPerSecond = targetFPS
+    link.add(to: .main, forMode: .common)
     displayLink = link
   }
 
@@ -398,14 +412,28 @@ struct ARSimulatorTestView: View {
     displayLink?.invalidate()
     displayLink = nil
   }
+
+  private func resetCamera() {
+    moveX = 0
+    moveZ = 0
+    lookX = 0
+    lookY = 0
+    speedMultiplier = 1.0
+    isSummoningActive = false
+    cameraController.reset()
+    cameraController.speedMultiplier = 1.0
+    cameraController.moveInputX = 0
+    cameraController.moveInputZ = 0
+    cameraController.lookInputX = 0
+    cameraController.lookInputY = 0
+  }
 }
 
 // Helper class to bridge CADisplayLink to camera controller (avoids @objc on struct)
 private class CameraUpdateTarget: NSObject {
   weak var controller: SimulatedCameraController?
-  var getInputs: (() -> (Float, Float, Float, Float))?
 
-  init(controller: SimulatedCameraController, view: ARSimulatorTestView) {
+  init(controller: SimulatedCameraController) {
     self.controller = controller
     super.init()
   }
