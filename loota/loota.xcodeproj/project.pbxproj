@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		C12460BC2DCE9F10001DC0D5 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1245FEF2DCE8727001DC0D5 /* ARKit.framework */; };
+		C1AC00092E7100A0001DC0D5 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1245FEF2DCE8727001DC0D5 /* ARKit.framework */; };
+		C1AC000C2E7100A0001DC0D5 /* lootaClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = C1AC00012E7100A0001DC0D5 /* lootaClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,6 +27,13 @@
 			remoteGlobalIDString = C1EE40792D975473008F13A2;
 			remoteInfo = loota;
 		};
+		C1AC000A2E7100A0001DC0D5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1EE40722D975473008F13A2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1AC00052E7100A0001DC0D5;
+			remoteInfo = lootaClip;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -34,6 +43,7 @@
 			dstPath = "$(CONTENTS_FOLDER_PATH)/AppClips";
 			dstSubfolderSpec = 16;
 			files = (
+				C1AC000C2E7100A0001DC0D5 /* lootaClip.app in Embed App Clips */,
 			);
 			name = "Embed App Clips";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -45,6 +55,7 @@
 		C1EE407A2D975473008F13A2 /* loota.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = loota.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1EE408A2D975476008F13A2 /* lootaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = lootaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1EE40942D975476008F13A2 /* lootaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = lootaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1AC00012E7100A0001DC0D5 /* lootaClip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lootaClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -55,6 +66,33 @@
 			);
 			target = C1EE40792D975473008F13A2 /* loota */;
 		};
+		C1AC00032E7100A0001DC0D5 /* Exceptions for "loota" folder in "lootaClip" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppDelegate.swift,
+				ContentView.swift,
+				SplashScreen.swift,
+				CoinSimulatorView.swift,
+				GiftCardTestView.swift,
+				AR/ARSimulatorTestView.swift,
+				AR/SimulatedARControls.swift,
+				AR/SimulatedARViewContainer.swift,
+				Info.plist,
+				lootaDebug.entitlements,
+				lootaRelease.entitlements,
+				"Preview Content",
+			);
+			target = C1AC00052E7100A0001DC0D5 /* lootaClip */;
+		};
+		C1AC00042E7100A0001DC0D5 /* Exceptions for "lootaClip" folder in "lootaClip" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				lootaClipDebug.entitlements,
+				lootaClipRelease.entitlements,
+			);
+			target = C1AC00052E7100A0001DC0D5 /* lootaClip */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -62,8 +100,17 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				C1245FA22DC1C5A3001DC0D5 /* Exceptions for "loota" folder in "loota" target */,
+				C1AC00032E7100A0001DC0D5 /* Exceptions for "loota" folder in "lootaClip" target */,
 			);
 			path = loota;
+			sourceTree = "<group>";
+		};
+		C1AC00022E7100A0001DC0D5 /* lootaClip */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C1AC00042E7100A0001DC0D5 /* Exceptions for "lootaClip" folder in "lootaClip" target */,
+			);
+			path = lootaClip;
 			sourceTree = "<group>";
 		};
 		C1EE408D2D975476008F13A2 /* lootaTests */ = {
@@ -84,6 +131,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				C12460BC2DCE9F10001DC0D5 /* ARKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1AC00072E7100A0001DC0D5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1AC00092E7100A0001DC0D5 /* ARKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -116,6 +171,7 @@
 			isa = PBXGroup;
 			children = (
 				C1EE407C2D975473008F13A2 /* loota */,
+				C1AC00022E7100A0001DC0D5 /* lootaClip */,
 				C1EE408D2D975476008F13A2 /* lootaTests */,
 				C1EE40972D975476008F13A2 /* lootaUITests */,
 				C1245FEE2DCE8727001DC0D5 /* Frameworks */,
@@ -127,6 +183,7 @@
 			isa = PBXGroup;
 			children = (
 				C1EE407A2D975473008F13A2 /* loota.app */,
+				C1AC00012E7100A0001DC0D5 /* lootaClip.app */,
 				C1EE408A2D975476008F13A2 /* lootaTests.xctest */,
 				C1EE40942D975476008F13A2 /* lootaUITests.xctest */,
 			);
@@ -148,6 +205,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				C1AC000B2E7100A0001DC0D5 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C1EE407C2D975473008F13A2 /* loota */,
@@ -158,6 +216,29 @@
 			productName = loota;
 			productReference = C1EE407A2D975473008F13A2 /* loota.app */;
 			productType = "com.apple.product-type.application";
+		};
+		C1AC00052E7100A0001DC0D5 /* lootaClip */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1AC000F2E7100A0001DC0D5 /* Build configuration list for PBXNativeTarget "lootaClip" */;
+			buildPhases = (
+				C1AC00062E7100A0001DC0D5 /* Sources */,
+				C1AC00072E7100A0001DC0D5 /* Frameworks */,
+				C1AC00082E7100A0001DC0D5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C1EE407C2D975473008F13A2 /* loota */,
+				C1AC00022E7100A0001DC0D5 /* lootaClip */,
+			);
+			name = lootaClip;
+			packageProductDependencies = (
+			);
+			productName = lootaClip;
+			productReference = C1AC00012E7100A0001DC0D5 /* lootaClip.app */;
+			productType = "com.apple.product-type.application.on-demand-install-capable";
 		};
 		C1EE40892D975476008F13A2 /* lootaTests */ = {
 			isa = PBXNativeTarget;
@@ -218,6 +299,9 @@
 					C1EE40792D975473008F13A2 = {
 						CreatedOnToolsVersion = 16.2;
 					};
+					C1AC00052E7100A0001DC0D5 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 					C1EE40892D975476008F13A2 = {
 						CreatedOnToolsVersion = 16.2;
 						TestTargetID = C1EE40792D975473008F13A2;
@@ -243,6 +327,7 @@
 			projectRoot = "";
 			targets = (
 				C1EE40792D975473008F13A2 /* loota */,
+				C1AC00052E7100A0001DC0D5 /* lootaClip */,
 				C1EE40892D975476008F13A2 /* lootaTests */,
 				C1EE40932D975476008F13A2 /* lootaUITests */,
 			);
@@ -251,6 +336,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		C1EE40782D975473008F13A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1AC00082E7100A0001DC0D5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -275,6 +367,13 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		C1EE40762D975473008F13A2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1AC00062E7100A0001DC0D5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -307,6 +406,11 @@
 			isa = PBXTargetDependency;
 			target = C1EE40792D975473008F13A2 /* loota */;
 			targetProxy = C1EE40952D975476008F13A2 /* PBXContainerItemProxy */;
+		};
+		C1AC000B2E7100A0001DC0D5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1AC00052E7100A0001DC0D5 /* lootaClip */;
+			targetProxy = C1AC000A2E7100A0001DC0D5 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -510,6 +614,82 @@
 			};
 			name = Release;
 		};
+		C1AC000D2E7100A0001DC0D5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = lootaClip/lootaClipDebug.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8XHKTX9X49;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = lootaClip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loota;
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera for augmented reality treasure hunting experiences.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app uses location services to place virtual treasures at real-world locations.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = allballbearings.loota.Clip;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "APPCLIP $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C1AC000E2E7100A0001DC0D5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = lootaClip/lootaClipRelease.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8XHKTX9X49;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = lootaClip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loota;
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera for augmented reality treasure hunting experiences.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app uses location services to place virtual treasures at real-world locations.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = allballbearings.loota.Clip;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "APPCLIP $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		C1EE40A22D975476008F13A2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -595,6 +775,15 @@
 			buildConfigurations = (
 				C1EE409F2D975476008F13A2 /* Debug */,
 				C1EE40A02D975476008F13A2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C1AC000F2E7100A0001DC0D5 /* Build configuration list for PBXNativeTarget "lootaClip" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1AC000D2E7100A0001DC0D5 /* Debug */,
+				C1AC000E2E7100A0001DC0D5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

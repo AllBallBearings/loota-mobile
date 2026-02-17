@@ -9,9 +9,19 @@
 			<key>orderHint</key>
 			<integer>0</integer>
 		</dict>
+		<key>lootaClip.xcscheme_^#shared#^_</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>1</integer>
+		</dict>
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
+		<key>C1AC00052E7100A0001DC0D5</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
 		<key>C1EE40792D975473008F13A2</key>
 		<dict>
 			<key>primary</key>

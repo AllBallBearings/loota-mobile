@@ -7,16 +7,18 @@ import SwiftUI
 public class HuntDataManager: ObservableObject {
   public static let shared = HuntDataManager()
 
+  private static let sharedDefaults = UserDefaults(suiteName: "group.allballbearings.loota") ?? .standard
+
   @Published public var huntData: HuntData?
   @Published public var errorMessage: String?
   @Published public var joinStatusMessage: String?
   @Published public var isFetchingHunt: Bool = false
   @Published public var showCompletionScreen: Bool = false
-  @AppStorage("userId") public var userId: String?
-  @AppStorage("userName") public var userName: String?
-  @AppStorage("userPhone") public var userPhone: String?
-  @AppStorage("collectedPinIDs") private var collectedPinIDsData: Data?
-  @AppStorage("lastHuntId") private var lastHuntId: String?
+  @AppStorage("userId", store: HuntDataManager.sharedDefaults) public var userId: String?
+  @AppStorage("userName", store: HuntDataManager.sharedDefaults) public var userName: String?
+  @AppStorage("userPhone", store: HuntDataManager.sharedDefaults) public var userPhone: String?
+  @AppStorage("collectedPinIDs", store: HuntDataManager.sharedDefaults) private var collectedPinIDsData: Data?
+  @AppStorage("lastHuntId", store: HuntDataManager.sharedDefaults) private var lastHuntId: String?
 
   private var collectedPinIDs: Set<String> = []
   private var hasJoinedHunt: Bool = false
