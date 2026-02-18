@@ -195,7 +195,7 @@ struct HuntJoinConfirmationView: View {
                   focusedField = nil
                 }) {
                   Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(LootaTheme.success)
+                    .foregroundColor(isValidPhone(editingPhone) ? LootaTheme.success : LootaTheme.textSecondary)
                     .font(.title3)
                 }
               }
@@ -400,20 +400,16 @@ struct HuntJoinConfirmationView: View {
   }
 
   private var finalName: String {
-    if showingNameField {
-      let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
-      return trimmed.isEmpty ? "Anonymous" : trimmed
-    } else {
-      return existingUserName ?? "Anonymous"
-    }
+    // Always use editingName since it's pre-populated with existingUserName on appear
+    // and reflects any changes the user made
+    let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "Anonymous" : trimmed
   }
 
   private var finalPhone: String {
-    if showingPhoneField {
-      return editingPhone.trimmingCharacters(in: .whitespacesAndNewlines)
-    } else {
-      return existingUserPhone ?? ""
-    }
+    // Always use editingPhone since it's pre-populated with existingUserPhone on appear
+    // and reflects any changes the user made
+    return editingPhone.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private func isValidPhone(_ phone: String) -> Bool {

@@ -1138,9 +1138,13 @@ public struct ContentView: View {
     self.currentHuntType = huntData.type
     self.statusMessage = ""  // Clear any previous error messages
 
-    // Reset session counter when loading a new hunt
-    self.coinsCollectedThisSession = 0
-    print("ContentView loadHuntData: Reset session counter. Total user collected: \(totalCoinsCollected)")
+    // Only reset session counter when loading a NEW hunt (not when current hunt data is updated)
+    if confirmedHuntId != huntData.id {
+      self.coinsCollectedThisSession = 0
+      print("ContentView loadHuntData: Reset session counter for new hunt. Total user collected: \(totalCoinsCollected)")
+    } else {
+      print("ContentView loadHuntData: Same hunt update, preserving session counter: \(coinsCollectedThisSession)")
+    }
 
     switch huntData.type {
     case .geolocation:

@@ -69,32 +69,64 @@ public class HuntDataManager: ObservableObject {
     print("DEBUG: HuntDataManager - setUserName called with name: '\(name)'")
     print("DEBUG: HuntDataManager - Current userName: '\(self.userName ?? "nil")'")
     print("DEBUG: HuntDataManager - Current userId: '\(self.userId ?? "nil")'")
-    
-    // If we have a userId but the backend doesn't support name updates,
-    // we need to clear the user data and register fresh with the correct name
-    if self.userId != nil {
-      print("DEBUG: HuntDataManager - Backend doesn't support name updates, clearing user data to register fresh")
-      self.clearUserData()
-    }
-    
+
+    // Update local state immediately
     self.userName = name
-    print("DEBUG: HuntDataManager - User name set to '\(name)', will register fresh user")
+
+    // If we have a userId, update the name on the backend
+    if self.userId != nil {
+      guard let deviceId = UIDevice.current.vendorId else {
+        print("DEBUG: HuntDataManager - setUserName: Device ID not available for update")
+        return
+      }
+
+      print("DEBUG: HuntDataManager - Updating name on backend to '\(name)'")
+      APIService.shared.updateUser(deviceId: deviceId, name: name) { result in
+        DispatchQueue.main.async {
+          switch result {
+          case .success(let user):
+            print("DEBUG: HuntDataManager - setUserName: Successfully updated name on backend to '\(user.name)'")
+          case .failure(let error):
+            print("DEBUG: HuntDataManager - setUserName: Failed to update name: \(error)")
+            // Continue anyway - local state is updated and will sync on next registration
+          }
+        }
+      }
+    } else {
+      print("DEBUG: HuntDataManager - User name set to '\(name)', will be used on registration")
+    }
   }
   
   public func setUserPhone(_ phone: String) {
     print("DEBUG: HuntDataManager - setUserPhone called with phone: '\(phone)'")
     print("DEBUG: HuntDataManager - Current userPhone: '\(self.userPhone ?? "nil")'")
     print("DEBUG: HuntDataManager - Current userId: '\(self.userId ?? "nil")'")
-    
-    // If we have a userId but the backend doesn't support phone updates,
-    // we need to clear the user data and register fresh with the correct phone
-    if self.userId != nil {
-      print("DEBUG: HuntDataManager - Backend doesn't support phone updates, clearing user data to register fresh")
-      self.clearUserData()
-    }
-    
+
+    // Update local state immediately
     self.userPhone = phone
-    print("DEBUG: HuntDataManager - User phone set to '\(phone)', will register fresh user")
+
+    // If we have a userId, update the phone on the backend
+    if self.userId != nil {
+      guard let deviceId = UIDevice.current.vendorId else {
+        print("DEBUG: HuntDataManager - setUserPhone: Device ID not available for update")
+        return
+      }
+
+      print("DEBUG: HuntDataManager - Updating phone on backend to '\(phone)'")
+      APIService.shared.updateUser(deviceId: deviceId, phone: phone) { result in
+        DispatchQueue.main.async {
+          switch result {
+          case .success(let user):
+            print("DEBUG: HuntDataManager - setUserPhone: Successfully updated phone on backend to '\(user.phone ?? "nil")'")
+          case .failure(let error):
+            print("DEBUG: HuntDataManager - setUserPhone: Failed to update phone: \(error)")
+            // Continue anyway - local state is updated and will sync on next registration
+          }
+        }
+      }
+    } else {
+      print("DEBUG: HuntDataManager - User phone set to '\(phone)', will be used on registration")
+    }
   }
   
   private func clearUserData() {

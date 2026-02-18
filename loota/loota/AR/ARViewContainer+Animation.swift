@@ -123,10 +123,9 @@ extension ARViewContainer.Coordinator {
 
     // Apply bobbing/spinning animation to all visible coins EXCEPT:
     // - Collected entities (already removed from scene)
-    // - Summoning entity (controlled by summoning movement logic instead)
+    // For summoning entity: apply spinning but NOT bobbing (position controlled by summoning logic)
     for entity in coinEntities {
       guard !collectedEntities.contains(entity) else { continue }
-      guard entity != summoningEntity else { continue }  // Summoning movement takes over
 
       // Apply spin rotation around world Y-axis (vertical)
       // spinRotation * baseRotation applies spin in world space first
@@ -134,8 +133,10 @@ extension ARViewContainer.Coordinator {
       let baseRotation = baseOrientations[entity] ?? simd_quatf(angle: 0, axis: [0, 1, 0])
       entity.transform.rotation = spinRotation * baseRotation
 
-      // Apply bobbing to the entity's local position
-      entity.position.y = bobOffset
+      // Apply bobbing to the entity's local position (skip for summoning entity - position controlled by summoning)
+      if entity != summoningEntity {
+        entity.position.y = bobOffset
+      }
     }
 
     // MARK: - Summoning Movement
