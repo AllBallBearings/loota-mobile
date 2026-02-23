@@ -51,7 +51,7 @@ struct HuntJoinConfirmationView: View {
       // Darkened glassy backdrop
       LootaTheme.backgroundGradient
         .ignoresSafeArea()
-      Color.black.opacity(0.55)
+      Color.white.opacity(0.22)
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture {
@@ -133,14 +133,7 @@ struct HuntJoinConfirmationView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(
-                  RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay(
-                      RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-                )
+                .lootaInsetField(cornerRadius: 16)
                 .foregroundColor(LootaTheme.textPrimary)
             } else {
               let displayName = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -150,10 +143,7 @@ struct HuntJoinConfirmationView: View {
                 .padding(.vertical, 12)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                  RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                )
+                .lootaInsetField(cornerRadius: 16)
                 .onTapGesture {
                   showingNameField = true
                   focusedField = .name
@@ -195,20 +185,13 @@ struct HuntJoinConfirmationView: View {
                   focusedField = nil
                 }) {
                   Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(LootaTheme.success)
+                    .foregroundColor(isValidPhone(editingPhone) ? LootaTheme.success : LootaTheme.textSecondary)
                     .font(.title3)
                 }
               }
-              .padding(.horizontal, 14)
-              .padding(.vertical, 12)
-              .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                  .fill(Color.white.opacity(0.08))
-                  .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                      .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                  )
-              )
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+              .lootaInsetField(cornerRadius: 16)
             } else {
               let displayPhone = editingPhone.trimmingCharacters(in: .whitespacesAndNewlines)
               Text(displayPhone.isEmpty ? "Not provided" : formatPhoneNumber(displayPhone))
@@ -221,10 +204,7 @@ struct HuntJoinConfirmationView: View {
                 .padding(.vertical, 12)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                  RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                )
+                .lootaInsetField(cornerRadius: 16)
                 .onTapGesture {
                   showingPhoneField = true
                   focusedField = .phone
@@ -268,10 +248,10 @@ struct HuntJoinConfirmationView: View {
         .padding()
         .background(
           RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(Color.orange.opacity(0.18))
+            .fill(LootaTheme.warning.opacity(0.2))
             .overlay(
               RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+                .stroke(LootaTheme.warning.opacity(0.55), lineWidth: 1)
             )
         )
         .overlay(
@@ -295,21 +275,11 @@ struct HuntJoinConfirmationView: View {
               Text(isJoining ? "Joining Hunt..." : "Join Hunt")
             }
             .font(.headline)
-            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding()
-            .background(
-              LinearGradient(
-                colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
-                startPoint: .leading,
-                endPoint: .trailing
-              )
-            )
-            .cornerRadius(18)
-            .shadow(color: LootaTheme.neonCyan.opacity(0.4), radius: 12, x: 0, y: 8)
             .disabled(isJoining || !isFormValid)
             .opacity((isJoining || !isFormValid) ? 0.6 : 1.0)
           }
+          .buttonStyle(LootaPrimaryButtonStyle())
 
           Button("Cancel") {
             onCancel()
@@ -400,20 +370,16 @@ struct HuntJoinConfirmationView: View {
   }
 
   private var finalName: String {
-    if showingNameField {
-      let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
-      return trimmed.isEmpty ? "Anonymous" : trimmed
-    } else {
-      return existingUserName ?? "Anonymous"
-    }
+    // Always use editingName since it's pre-populated with existingUserName on appear
+    // and reflects any changes the user made
+    let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "Anonymous" : trimmed
   }
 
   private var finalPhone: String {
-    if showingPhoneField {
-      return editingPhone.trimmingCharacters(in: .whitespacesAndNewlines)
-    } else {
-      return existingUserPhone ?? ""
-    }
+    // Always use editingPhone since it's pre-populated with existingUserPhone on appear
+    // and reflects any changes the user made
+    return editingPhone.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private func isValidPhone(_ phone: String) -> Bool {
@@ -505,13 +471,15 @@ private struct StatChip: View {
     }
     .padding(.vertical, 12)
     .padding(.horizontal, 16)
-    .background(
-      RoundedRectangle(cornerRadius: 20, style: .continuous)
-        .fill(Color.white.opacity(0.08))
-        .overlay(
-          RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
-    )
+      .background(
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+          .fill(Color.white.opacity(0.32))
+          .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+              .stroke(Color.white.opacity(0.62), lineWidth: 1)
+          )
+          .shadow(color: LootaTheme.panelHighlight.opacity(0.5), radius: 4, x: -2, y: -2)
+          .shadow(color: LootaTheme.panelShadow.opacity(0.45), radius: 7, x: 4, y: 5)
+      )
   }
 }
