@@ -21,7 +21,7 @@ struct HuntCompletionView: View {
             LootaTheme.backgroundGradient
                 .ignoresSafeArea()
             RadialGradient(
-                gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]),
+                gradient: Gradient(colors: [Color.white.opacity(0.45), Color.clear]),
                 center: .center,
                 startRadius: 80,
                 endRadius: 480
@@ -100,11 +100,13 @@ struct HuntCompletionView: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
+                                .fill(Color.white.opacity(0.3))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                        .stroke(Color.white.opacity(0.58), lineWidth: 1)
                                 )
+                                .shadow(color: LootaTheme.panelHighlight.opacity(0.42), radius: 5, x: -3, y: -3)
+                                .shadow(color: LootaTheme.panelShadow.opacity(0.5), radius: 8, x: 4, y: 5)
                         )
                     }
 
@@ -112,20 +114,10 @@ struct HuntCompletionView: View {
                         isPresented = false
                     }) {
                         Text("Back to Hunts")
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
                             .padding(.horizontal, 34)
                             .padding(.vertical, 14)
-                            .background(
-                                LinearGradient(
-                                    colors: [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(22)
-                            .shadow(color: LootaTheme.cosmicPurple.opacity(0.4), radius: 14, x: 0, y: 10)
                     }
+                    .buttonStyle(LootaPrimaryButtonStyle())
                     .padding(.top, 8)
                 }
                 .lootaGlassBackground(
@@ -244,7 +236,13 @@ struct EverythingsLootedView: View {
                         .padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.white.opacity(0.06))
+                                .fill(Color.white.opacity(0.3))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                                )
+                                .shadow(color: LootaTheme.panelHighlight.opacity(0.35), radius: 4, x: -2, y: -2)
+                                .shadow(color: LootaTheme.panelShadow.opacity(0.4), radius: 6, x: 3, y: 4)
                         )
                     }
 
@@ -271,11 +269,13 @@ struct EverythingsLootedView: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.white.opacity(0.3))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            .stroke(Color.white.opacity(0.58), lineWidth: 1)
                     )
+                    .shadow(color: LootaTheme.panelHighlight.opacity(0.42), radius: 5, x: -3, y: -3)
+                    .shadow(color: LootaTheme.panelShadow.opacity(0.5), radius: 8, x: 4, y: 5)
             )
 
             // Creator contact message
@@ -299,11 +299,13 @@ struct EverythingsLootedView: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.white.opacity(0.32))
                     .overlay(
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .stroke(LootaTheme.neonCyan.opacity(0.3), lineWidth: 1)
+                            .stroke(LootaTheme.neonCyan.opacity(0.5), lineWidth: 1)
                     )
+                    .shadow(color: LootaTheme.panelHighlight.opacity(0.45), radius: 4, x: -2, y: -2)
+                    .shadow(color: LootaTheme.panelShadow.opacity(0.5), radius: 8, x: 4, y: 5)
             )
 
             // Back button
@@ -311,20 +313,10 @@ struct EverythingsLootedView: View {
                 isPresented = false
             }) {
                 Text("Back to Hunts")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
                     .padding(.horizontal, 34)
                     .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: [LootaTheme.cosmicPurple, LootaTheme.neonCyan],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(22)
-                    .shadow(color: LootaTheme.cosmicPurple.opacity(0.4), radius: 14, x: 0, y: 10)
             }
+            .buttonStyle(LootaPrimaryButtonStyle())
             .padding(.top, 8)
         }
         .lootaGlassBackground(
@@ -398,11 +390,13 @@ struct WinnerContactCard: View {
         .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(Color.white.opacity(0.3))
                 .overlay(
                     RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.58), lineWidth: 1)
                 )
+                .shadow(color: LootaTheme.panelHighlight.opacity(0.45), radius: 4, x: -2, y: -2)
+                .shadow(color: LootaTheme.panelShadow.opacity(0.45), radius: 8, x: 4, y: 5)
         )
     }
     
@@ -485,14 +479,7 @@ struct JoinHuntView: View {
                     .keyboardType(.phonePad)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                    )
+                    .lootaInsetField(cornerRadius: 18)
                     .foregroundColor(LootaTheme.textPrimary)
                     .onChange(of: participantPhone) { newValue in
                         participantPhone = newValue.formattedPhoneNumber()
@@ -507,20 +494,10 @@ struct JoinHuntView: View {
                 joinHunt()
             }) {
                 Text(isJoining ? "Joining Hunt..." : "Join Hunt")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(20)
-                    .shadow(color: LootaTheme.neonCyan.opacity(0.3), radius: 12, x: 0, y: 8)
             }
+            .buttonStyle(LootaPrimaryButtonStyle())
             .disabled(participantPhone.isEmpty || !participantPhone.isValidPhoneNumber() || isJoining)
             .opacity((participantPhone.isEmpty || !participantPhone.isValidPhoneNumber() || isJoining) ? 0.6 : 1.0)
             

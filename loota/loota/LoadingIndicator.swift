@@ -19,7 +19,7 @@ struct LoadingIndicator: View {
             // Semi-transparent background
             LootaTheme.backgroundGradient
                 .ignoresSafeArea()
-                .overlay(Color.black.opacity(0.55))
+                .overlay(Color.white.opacity(0.26))
                 .ignoresSafeArea()
             
             VStack(spacing: 24) {
@@ -85,6 +85,7 @@ struct LoadingIndicator: View {
                 cornerRadius: 32,
                 padding: EdgeInsets(top: 28, leading: 32, bottom: 28, trailing: 32)
             )
+            .padding(.horizontal, 24)
         }
         .onAppear {
             withAnimation {

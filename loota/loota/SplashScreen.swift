@@ -11,7 +11,7 @@ struct SplashScreen: View {
             LootaTheme.backgroundGradient
             .ignoresSafeArea()
             RadialGradient(
-                gradient: Gradient(colors: [Color.white.opacity(0.15), Color.clear]),
+                gradient: Gradient(colors: [Color.white.opacity(0.4), Color.clear]),
                 center: .center,
                 startRadius: 40,
                 endRadius: 320
@@ -59,9 +59,9 @@ struct SplashScreen: View {
                     // Loota text with glow effect
                     Text("Loota")
                         .font(.system(size: 64, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .shadow(color: LootaTheme.cosmicPurple.opacity(0.9), radius: 24, x: 0, y: 0)
-                        .shadow(color: .white.opacity(0.35), radius: 16, x: 0, y: 0)
+                        .foregroundColor(LootaTheme.textPrimary)
+                        .shadow(color: LootaTheme.neonCyan.opacity(0.45), radius: 18, x: 0, y: 0)
+                        .shadow(color: .white.opacity(0.5), radius: 10, x: -2, y: -2)
                         .scaleEffect(isAnimating ? 1.06 : 1.0)
                         .opacity(textOpacity)
                         .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
@@ -94,6 +94,11 @@ struct SplashScreen: View {
                             .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: isAnimating)
                     )
             }
+            .lootaGlassBackground(
+                cornerRadius: 36,
+                padding: EdgeInsets(top: 30, leading: 30, bottom: 30, trailing: 30)
+            )
+            .padding(.horizontal, 28)
         }
         .onAppear {
             // Animate text appearance

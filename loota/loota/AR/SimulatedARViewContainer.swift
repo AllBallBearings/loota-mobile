@@ -789,33 +789,90 @@ public class SimCoordinator: NSObject {
         -simulatedCameraTransform.columns.2.z
       ))
 
-    let focusConeAngle: Float = 8.0 * (.pi / 180.0)
+    // Match device behavior: horizontal threshold stays tight, while vertical gating
+    // is based on a screen-space hotspot that extends up toward top of display.
+    let horizontalFocusAngle: Float = 8.0 * (.pi / 180.0)
+    let hotspotTopYRatio: CGFloat = 0.05
+    let hotspotBottomYRatio: CGFloat = 0.65
+    let rightVector = normalize(
+      SIMD3<Float>(
+        simulatedCameraTransform.columns.0.x,
+        simulatedCameraTransform.columns.0.y,
+        simulatedCameraTransform.columns.0.z
+      ))
+    let upVector = normalize(
+      SIMD3<Float>(
+        simulatedCameraTransform.columns.1.x,
+        simulatedCameraTransform.columns.1.y,
+        simulatedCameraTransform.columns.1.z
+      ))
 
     var centerEntity: ModelEntity? = nil
     var closestDistance: Float = Float.infinity
-    var smallestAngle: Float = Float.infinity
+    var smallestHorizontalAngle: Float = Float.infinity
 
     for entity in coinEntities {
       guard !collectedEntities.contains(entity) else { continue }
       let entityWorldPosition = entity.position(relativeTo: nil)
+
+      // Calculate base position without bobbing for stable focus detection.
+      // The entity's local Y position IS the bob offset (set in animation loop).
+      let bobOffset = entity.position.y
+      let baseWorldPosition = SIMD3<Float>(
+        entityWorldPosition.x,
+        entityWorldPosition.y - bobOffset,
+        entityWorldPosition.z
+      )
+
       let toEntity = entityWorldPosition - cameraPosition
       let distance = simd_length(toEntity)
 
       guard distance <= focusRange else { continue }
 
       let direction = normalize(toEntity)
-      let dotProduct = simd_dot(forwardVector, direction)
-      let clampedDot = max(min(dotProduct, 1.0), -1.0)
-      let angle = acos(clampedDot)
+      let forwardDot = simd_dot(forwardVector, direction)
+      guard forwardDot > 0 else { continue }
 
-      guard angle <= focusConeAngle else { continue }
+      let horizontalOffset = simd_dot(direction, rightVector)
+      let verticalOffset = simd_dot(direction, upVector)
 
-      if angle < smallestAngle
-        || (abs(angle - smallestAngle) < 0.5 * (.pi / 180.0) && distance < closestDistance)
+      let horizontalAngle = abs(atan2(horizontalOffset, forwardDot))
+      let verticalAngleSigned = atan2(verticalOffset, forwardDot)
+
+      // Use screen-space bounds for both horizontal AND vertical gating.
+      // This ensures only coins actually visible on screen can be focused.
+      // Use baseWorldPosition (without bobbing) for stable screen projection.
+      if let arView, let projectedPoint = arView.project(baseWorldPosition) {
+        let viewWidth = arView.bounds.width
+        let viewHeight = arView.bounds.height
+
+        // Horizontal bounds: center 20% of screen (40% to 60%) for precision targeting
+        let hotspotLeftXRatio: CGFloat = 0.40
+        let hotspotRightXRatio: CGFloat = 0.60
+        let minX = viewWidth * hotspotLeftXRatio
+        let maxX = viewWidth * hotspotRightXRatio
+        guard projectedPoint.x >= minX && projectedPoint.x <= maxX else { continue }
+
+        // Vertical bounds
+        let minY = viewHeight * hotspotTopYRatio
+        let maxY = viewHeight * hotspotBottomYRatio
+        guard projectedPoint.y >= minY && projectedPoint.y <= maxY else { continue }
+      } else {
+        // Fallback to angle-based checks if projection fails.
+        guard horizontalAngle <= horizontalFocusAngle else { continue }
+        let fallbackUpwardAngle: Float = 28.0 * (.pi / 180.0)
+        let fallbackDownwardAngle: Float = 14.0 * (.pi / 180.0)
+        guard verticalAngleSigned <= fallbackUpwardAngle else { continue }
+        guard verticalAngleSigned >= -fallbackDownwardAngle else { continue }
+      }
+
+      if horizontalAngle < smallestHorizontalAngle
+        || (abs(horizontalAngle - smallestHorizontalAngle) < 0.5 * (.pi / 180.0)
+          && distance < closestDistance)
       {
         centerEntity = entity
         closestDistance = distance
-        smallestAngle = angle
+        smallestHorizontalAngle = horizontalAngle
       }
     }
 

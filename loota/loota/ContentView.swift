@@ -40,6 +40,7 @@ public struct ContentView: View {
   @State private var confirmedHuntId: String? = nil
   @State private var isLoadingLoot = false
   @State private var isLoadingModels = false
+  @State private var edgeGlowPulse = false
 
   public init() {
     print("DEBUG: ContentView - init() called.")
@@ -140,6 +141,9 @@ public struct ContentView: View {
         }
         .onAppear {
           print("[Auto Claude] Main content view loaded successfully")
+          withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+            edgeGlowPulse = true
+          }
 
           // Auto-launch AR simulator if launched with AR_SIMULATOR_TEST argument
           if shouldAutoLaunchARSimulator {
@@ -224,7 +228,12 @@ public struct ContentView: View {
         .edgesIgnoringSafeArea(.all)
       } else {
         // Placeholder when AR is not ready or hunt not confirmed
-        Color.black.opacity(0.65).edgesIgnoringSafeArea(.all)
+        LinearGradient(
+          colors: [Color.black.opacity(0.4), Color.black.opacity(0.2)],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+        .edgesIgnoringSafeArea(.all)
         VStack(spacing: 20) {
           ZStack {
             Circle()
@@ -313,25 +322,13 @@ public struct ContentView: View {
 
           Text(String(format: "%.2f ft", distance * 3.28084))
             .font(.system(size: 24, weight: .bold, design: .rounded))
-            .foregroundColor(LootaTheme.highlight)
+            .foregroundColor(LootaTheme.textPrimary)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(
-              RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.black.opacity(0.6))
-                .overlay(
-                  RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                      LinearGradient(
-                        colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                      ),
-                      lineWidth: 2
-                    )
-                )
+            .lootaGlassBackground(
+              cornerRadius: 18,
+              padding: EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20)
             )
-            .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 12, x: 0, y: 4)
 
           Spacer()
         }
@@ -348,93 +345,122 @@ public struct ContentView: View {
             VStack(spacing: 4) {
               Text("Nearest Loot")
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundColor(LootaTheme.textPrimary)
+                .foregroundColor(LootaTheme.textSecondary)
               Text(String(format: "%.0f ft", distance * 3.28084))
                 .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(LootaTheme.highlight)
+                .foregroundColor(LootaTheme.textPrimary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-              RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.black.opacity(0.6))
-                .overlay(
-                  RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                      LinearGradient(
-                        colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                      ),
-                      lineWidth: 2
-                    )
-                )
+            .lootaGlassBackground(
+              cornerRadius: 16,
+              padding: EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
             )
-            .shadow(color: LootaTheme.accentGlow.opacity(0.4), radius: 12, x: 0, y: 4)
 
             // Compass needle with a flattened HUD look
             ZStack {
+              // Outer ellipse - dark background
               Ellipse()
                 .fill(
-                  LinearGradient(
+                  RadialGradient(
                     colors: [
-                      Color.black.opacity(0.85),
-                      Color.black.opacity(0.45)
+                      Color.black.opacity(0.7),
+                      Color.black.opacity(0.9)
                     ],
-                    startPoint: .top,
-                    endPoint: .bottom
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 70
                   )
                 )
                 .overlay(
                   Ellipse()
                     .stroke(
                       LinearGradient(
-                        colors: [LootaTheme.neonCyan.opacity(0.6), LootaTheme.cosmicPurple.opacity(0.6)],
+                        colors: [LootaTheme.neonCyan.opacity(0.5), LootaTheme.cosmicPurple.opacity(0.5)],
                         startPoint: .leading,
                         endPoint: .trailing
                       ),
-                      lineWidth: 3
+                      lineWidth: 2.5
                     )
-                    .blur(radius: 0.5)
                 )
 
+              // Inner glow
               Ellipse()
                 .fill(
-                  LinearGradient(
+                  RadialGradient(
                     colors: [
-                      LootaTheme.neonCyan.opacity(0.12),
-                      Color.white.opacity(0.02)
+                      LootaTheme.neonCyan.opacity(0.08),
+                      Color.clear
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 50
                   )
                 )
-                .padding(8)
+                .padding(6)
 
-              Capsule()
-                .fill(Color.white.opacity(0.25))
-                .frame(width: 72, height: 6)
-                .blur(radius: 2)
-                .offset(y: -22)
+              // Subtle bottom shadow inside ellipse
+              Ellipse()
+                .fill(Color.black.opacity(0.5))
+                .frame(width: 90, height: 25)
+                .blur(radius: 8)
+                .offset(y: 28)
 
-              Capsule()
-                .fill(Color.black.opacity(0.6))
-                .frame(width: 85, height: 12)
-                .blur(radius: 6)
-                .offset(y: 30)
+              // Rotating 3D arrow with smoothed rotation
+              ZStack {
+                // Arrow shadow
+                Arrow3DShape()
+                  .fill(Color.black.opacity(0.5))
+                  .frame(width: 46, height: 70)
+                  .blur(radius: 4)
+                  .offset(x: 2, y: 4)
 
-              // Rotating arrow needle with smoothed rotation
-              Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(
-                  LinearGradient(
-                    colors: [LootaTheme.neonCyan, LootaTheme.cosmicPurple],
-                    startPoint: .top,
-                    endPoint: .bottom
+                // Right half - darker shade for 3D effect
+                Arrow3DRightHalf()
+                  .fill(
+                    LinearGradient(
+                      colors: [
+                        LootaTheme.neonCyan.opacity(0.7),
+                        LootaTheme.cosmicPurple.opacity(0.9)
+                      ],
+                      startPoint: .top,
+                      endPoint: .bottom
+                    )
                   )
-                )
-                .shadow(color: LootaTheme.neonCyan.opacity(0.9), radius: 10)
-                .rotationEffect(Angle(radians: Double(smoothedCompassAngle)))
+                  .frame(width: 46, height: 70)
+
+                // Left half - lighter shade for 3D effect
+                Arrow3DLeftHalf()
+                  .fill(
+                    LinearGradient(
+                      colors: [
+                        LootaTheme.highlight,
+                        LootaTheme.neonCyan
+                      ],
+                      startPoint: .top,
+                      endPoint: .bottom
+                    )
+                  )
+                  .frame(width: 46, height: 70)
+
+                // Edge highlight on left side
+                Arrow3DLeftHalf()
+                  .stroke(
+                    LinearGradient(
+                      colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)],
+                      startPoint: .top,
+                      endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                  )
+                  .frame(width: 46, height: 70)
+
+                // Tip highlight
+                Circle()
+                  .fill(Color.white.opacity(0.8))
+                  .frame(width: 4, height: 4)
+                  .offset(y: -31)
+              }
+              .shadow(color: LootaTheme.neonCyan.opacity(0.7), radius: 12)
+              .rotationEffect(Angle(radians: Double(smoothedCompassAngle)))
             }
             .frame(width: 130, height: 95)
             .rotation3DEffect(.degrees(55), axis: (x: 1, y: 0, z: 0))
@@ -527,76 +553,18 @@ public struct ContentView: View {
         }
         .frame(maxWidth: .infinity)
       }
+
+      if focusedLootId != nil {
+        summonReadyEdgeGlow
+      }
       
       // UI Overlay VStack
       VStack {
         HStack(alignment: .top) {  // Top Row: Counter and Object Type Display
-          // Animated counter in top left
-          HStack(alignment: .center, spacing: 14) {
-            ZStack {
-              Circle()
-                .fill(LootaTheme.accentGradient)
-                .frame(width: 54, height: 54)
-                .shadow(color: LootaTheme.scoreGlow(for: animate), radius: animate ? 18 : 8, x: 0, y: 6)
-              Image(systemName: "diamond.fill")
-                .font(.system(size: 26, weight: .medium))
-                .foregroundColor(.white)
-                .rotationEffect(.degrees(12))
-            }
-            .scaleEffect(animate ? 1.15 : 1.0)
-            .animation(.spring(response: 0.4, dampingFraction: 0.55), value: animate)
-            
-            VStack(alignment: .leading, spacing: 2) {
-              Text("Loot Collected")
-                .font(.caption)
-                .foregroundColor(LootaTheme.textSecondary)
-                .textCase(.uppercase)
-              
-              Text("\(totalCoinsCollected)")
-                .font(.system(size: 36, weight: .heavy, design: .rounded))
-                .foregroundColor(LootaTheme.highlight)
-                .shadow(color: LootaTheme.scoreGlow(for: animate), radius: animate ? 14 : 4, x: 0, y: 0)
-                .scaleEffect(animate ? 1.2 : 1.0)
-                .animation(.spring(response: 0.4, dampingFraction: 0.5), value: animate)
-            }
-          }
-          .lootaGlassBackground(
-            cornerRadius: 28,
-            padding: EdgeInsets(top: 14, leading: 18, bottom: 14, trailing: 22)
-          )
-          .padding([.top, .leading], 16)
+          lootProgressCard
+            .padding([.top, .horizontal], 16)
 
-          Spacer()  // Pushes coin count to the right
-
-          // Remaining loot count display
-          VStack(alignment: .trailing, spacing: 4) {
-            Text("Remaining Loot")
-              .font(.caption2.smallCaps())
-              .foregroundColor(LootaTheme.textSecondary)
-            HStack(spacing: 8) {
-              Text("\(remainingLootCount)")
-                .font(.headline.weight(.bold))
-                .foregroundColor(LootaTheme.highlight)
-              Text("Coins")
-                .font(.headline.weight(.bold))
-                .foregroundColor(LootaTheme.highlight)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-              Capsule()
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                  Capsule()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-            )
-          }
-          .lootaGlassBackground(
-            cornerRadius: 26,
-            padding: EdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18)
-          )
-          .padding([.top, .trailing], 16)
+          Spacer()
         }
 
         Spacer()  // Pushes debug button to bottom
@@ -708,14 +676,7 @@ public struct ContentView: View {
               }
               .padding(.vertical, 10)
               .padding(.horizontal, 12)
-              .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                  .fill(Color.white.opacity(0.08))
-                  .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                  )
-              )
+              .lootaInsetField(cornerRadius: 20)
             }
 
             Button(action: {
@@ -737,14 +698,7 @@ public struct ContentView: View {
               }
               .padding(.vertical, 10)
               .padding(.horizontal, 12)
-              .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                  .fill(Color.white.opacity(0.08))
-                  .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                  )
-              )
+              .lootaInsetField(cornerRadius: 20)
             }
 
             // Object Type Override Picker
@@ -784,14 +738,7 @@ public struct ContentView: View {
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
-            .background(
-              RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                  RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                )
-            )
+            .lootaInsetField(cornerRadius: 20)
 
             Button(action: {
               showGiftCardTest = true
@@ -812,14 +759,7 @@ public struct ContentView: View {
               }
               .padding(.vertical, 10)
               .padding(.horizontal, 12)
-              .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                  .fill(Color.white.opacity(0.08))
-                  .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                  )
-              )
+              .lootaInsetField(cornerRadius: 20)
             }
 
             Button(action: {
@@ -841,14 +781,7 @@ public struct ContentView: View {
               }
               .padding(.vertical, 10)
               .padding(.horizontal, 12)
-              .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                  .fill(Color.white.opacity(0.08))
-                  .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                      .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                  )
-              )
+              .lootaInsetField(cornerRadius: 20)
             }
 
             if !errorMessage.isEmpty {
@@ -1110,17 +1043,129 @@ public struct ContentView: View {
   private func debugChip(_ text: String) -> some View {
     Text(text)
       .font(.caption.monospacedDigit())
-      .foregroundColor(LootaTheme.textPrimary)
+      .foregroundColor(LootaTheme.textPrimary.opacity(0.9))
       .padding(.horizontal, 12)
       .padding(.vertical, 6)
-      .background(
-        Capsule()
-          .fill(Color.white.opacity(0.08))
-          .overlay(
-            Capsule()
-              .stroke(Color.white.opacity(0.18), lineWidth: 1)
-          )
+      .lootaInsetField(cornerRadius: 14)
+  }
+
+  /// SF Symbol icon name based on hunt object type
+  private var lootIconName: String {
+    switch selectedObject {
+    case .coin:
+      return "dollarsign.circle.fill"
+    case .giftCard:
+      return "giftcard.fill"
+    case .dollarSign:
+      return "dollarsign.square.fill"
+    case .none:
+      return "sparkles.square.filled.on.square"
+    }
+  }
+
+  /// Gradient color for the loot icon based on hunt object type
+  private var lootIconGradient: LinearGradient {
+    switch selectedObject {
+    case .coin:
+      // Golden gradient for coins
+      return LinearGradient(
+        colors: [Color(red: 1.0, green: 0.84, blue: 0.0), Color(red: 0.85, green: 0.65, blue: 0.13)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
       )
+    case .giftCard:
+      // Festive gradient for gift cards
+      return LinearGradient(
+        colors: [Color(red: 0.95, green: 0.3, blue: 0.4), Color(red: 0.8, green: 0.2, blue: 0.5)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+    case .dollarSign:
+      // Green gradient for dollar signs
+      return LinearGradient(
+        colors: [Color(red: 0.2, green: 0.8, blue: 0.4), Color(red: 0.1, green: 0.6, blue: 0.3)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+    case .none:
+      return LootaTheme.accentGradient
+    }
+  }
+
+  private var lootProgressCard: some View {
+    HStack(alignment: .center, spacing: 10) {
+      ZStack {
+        Circle()
+          .fill(lootIconGradient)
+          .frame(width: 34, height: 34)
+          .shadow(color: LootaTheme.scoreGlow(for: animate), radius: animate ? 12 : 5, x: 0, y: 4)
+        Image(systemName: lootIconName)
+          .font(.system(size: 16, weight: .bold))
+          .foregroundColor(.white)
+      }
+      .scaleEffect(animate ? 1.08 : 1.0)
+      .animation(.spring(response: 0.4, dampingFraction: 0.55), value: animate)
+
+      VStack(alignment: .leading, spacing: 5) {
+        Text("Loot Status")
+          .font(.system(size: 10, weight: .semibold, design: .rounded))
+          .foregroundColor(LootaTheme.textSecondary)
+
+        HStack(spacing: 10) {
+          VStack(alignment: .center, spacing: 2) {
+            Text("Collected")
+              .font(.system(size: 10, weight: .semibold, design: .rounded))
+              .foregroundColor(LootaTheme.textSecondary)
+            Text("\(totalCoinsCollected)")
+              .font(.system(size: 18, weight: .heavy, design: .rounded))
+              .foregroundColor(LootaTheme.textPrimary)
+              .scaleEffect(animate ? 1.08 : 1.0)
+              .animation(.spring(response: 0.4, dampingFraction: 0.5), value: animate)
+          }
+
+          Rectangle()
+            .fill(LootaTheme.textMuted.opacity(0.35))
+            .frame(width: 1, height: 24)
+
+          VStack(alignment: .center, spacing: 2) {
+            Text("Remaining")
+              .font(.system(size: 10, weight: .semibold, design: .rounded))
+              .foregroundColor(LootaTheme.textSecondary)
+            Text("\(remainingLootCount)")
+              .font(.system(size: 18, weight: .heavy, design: .rounded))
+              .foregroundColor(LootaTheme.textPrimary)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: 205)
+    .lootaGlassBackground(
+      cornerRadius: 30,
+      padding: EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
+    )
+  }
+
+  private var summonReadyEdgeGlow: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 34, style: .continuous)
+        .stroke(
+          LinearGradient(
+            colors: [LootaTheme.neonCyan, LootaTheme.highlight, LootaTheme.cosmicPurple],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          ),
+          lineWidth: isSummoningActive ? 6 : 4
+        )
+        .blur(radius: isSummoningActive ? 8 : 6)
+        .opacity(edgeGlowPulse ? 0.95 : 0.55)
+
+      RoundedRectangle(cornerRadius: 34, style: .continuous)
+        .stroke(Color.white.opacity(edgeGlowPulse ? 0.35 : 0.15), lineWidth: 1.2)
+        .opacity(isSummoningActive ? 0.95 : 0.7)
+    }
+    .padding(5)
+    .ignoresSafeArea()
+    .allowsHitTesting(false)
   }
 
   private var dividerLine: some View {
@@ -1226,5 +1271,58 @@ public struct ContentView: View {
       self.selectedObject = .none
       print("ContentView displayErrorMessage: \(message)")
     }
+  }
+}
+
+/// Arrow shape with indented back for classic arrow appearance
+private struct Arrow3DShape: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    let indentDepth = rect.height * 0.35  // How deep the back indent goes
+
+    // Tip at top center
+    path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+    // Right edge to bottom-right corner
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+    // Indent to center notch
+    path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - indentDepth))
+    // Left edge from notch to bottom-left corner
+    path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+    path.closeSubpath()
+    return path
+  }
+}
+
+/// Left half of arrow for 3D shading effect
+private struct Arrow3DLeftHalf: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    let indentDepth = rect.height * 0.35
+
+    // Tip at top center
+    path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+    // Down to bottom-left corner
+    path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+    // To center notch
+    path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - indentDepth))
+    path.closeSubpath()
+    return path
+  }
+}
+
+/// Right half of arrow for 3D shading effect
+private struct Arrow3DRightHalf: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    let indentDepth = rect.height * 0.35
+
+    // Tip at top center
+    path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+    // Down to center notch
+    path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - indentDepth))
+    // To bottom-right corner
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+    path.closeSubpath()
+    return path
   }
 }
